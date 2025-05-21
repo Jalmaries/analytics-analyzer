@@ -1,101 +1,200 @@
+/**
+ * Analytics Analyzer
+ * 
+ * This script processes CSV files containing analytics data,
+ * calculates key metrics, and visualizes the results.
+ */
+
 document.addEventListener('DOMContentLoaded', () => {
+    // DOM Elements
     const dropArea = document.getElementById('dropArea');
     const fileInput = document.getElementById('fileInput');
     const selectFileBtn = document.getElementById('selectFileBtn');
     const resultsSection = document.getElementById('resultsSection');
     const resultsContainer = document.getElementById('resultsContainer');
 
-    // Setup the drag and drop events
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-        dropArea.addEventListener(eventName, preventDefaults, false);
-    });
+    // Setup event listeners
+    initializeEventListeners();
 
+    /**
+     * Set up all event listeners for the application
+     */
+    function initializeEventListeners() {
+        // Drag and drop events
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, preventDefaults, false);
+        });
+
+        // Add active class on drag
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropArea.addEventListener(eventName, () => {
+                dropArea.classList.add('active');
+            }, false);
+        });
+
+        // Remove active class on drag leave/drop
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, () => {
+                dropArea.classList.remove('active');
+            }, false);
+        });
+
+        // Handle file drop
+        dropArea.addEventListener('drop', handleDrop, false);
+        
+        // Handle file selection through input
+        fileInput.addEventListener('change', handleFiles, false);
+        
+        // Connect the select button to the file input
+        selectFileBtn.addEventListener('click', () => {
+            fileInput.click();
+        });
+    }
+
+    /**
+     * Prevent default browser behavior for drag events
+     */
     function preventDefaults(e) {
         e.preventDefault();
         e.stopPropagation();
     }
 
-    ['dragenter', 'dragover'].forEach(eventName => {
-        dropArea.addEventListener(eventName, () => {
-            dropArea.classList.add('active');
-        }, false);
-    });
-
-    ['dragleave', 'drop'].forEach(eventName => {
-        dropArea.addEventListener(eventName, () => {
-            dropArea.classList.remove('active');
-        }, false);
-    });
-
-    // Handle file drop
-    dropArea.addEventListener('drop', handleDrop, false);
-    
-    // Handle file selection through input
-    fileInput.addEventListener('change', handleFiles, false);
-    
-    // Connect the select button to the file input
-    selectFileBtn.addEventListener('click', () => {
-        fileInput.click();
-    });
-
+    /**
+     * Handle dropped files
+     */
     function handleDrop(e) {
         const dt = e.dataTransfer;
         const files = dt.files;
         handleFiles({ target: { files } });
     }
 
+    /**
+     * Process files when selected or dropped
+     */
     function handleFiles(e) {
         const file = e.target.files[0];
         if (file && file.type === 'text/csv') {
             parseCSV(file);
         } else {
-            alert('Please upload a valid CSV file');
+            showError('Please upload a valid CSV file');
         }
     }
 
+    /**
+     * Display an error message to the user
+     */
+    function showError(message) {
+        resultsContainer.innerHTML = `
+            <div class="error">
+                <p>Error: ${message}</p>
+            </div>
+        `;
+        resultsSection.style.display = 'block';
+    }
+
+    /**
+     * Parse the CSV file contents
+     */
     function parseCSV(file) {
         const reader = new FileReader();
         
         reader.onload = function(e) {
-            const contents = e.target.result;
-            processData(contents, file.name);
+            try {
+                const contents = e.target.result;
+                processData(contents, file.name);
+            } catch (error) {
+                showError(`Failed to process the file: ${error.message}`);
+                console.error('CSV processing error:', error);
+            }
         };
+        
+        reader.onerror = function() {
+            showError('Failed to read the file');
+        };
+        
+        // Show loading message
+        resultsContainer.innerHTML = '<div class="processing">Processing data...</div>';
+        resultsSection.style.display = 'block';
         
         reader.readAsText(file);
     }
 
+    /**
+     * Process CSV data and display results
+     */
     function processData(csvContent, fileName) {
-        // Display processing message
-        resultsContainer.innerHTML = '<div class="processing">Processing data...</div>';
-        resultsSection.style.display = 'block';
-
-        // Parse CSV data
-        const lines = csvContent.split(/\r?\n/);
-        const headers = lines[0].split(',').map(header => header.replace(/"/g, '').trim());
-        
-        // Find column indexes
+        try {
+            // Parse CSV data
+            const lines = csvContent.split(/\r?\n/);
+            if (lines.length <= 1) {
+                throw new Error('CSV file appears to be empty or has no data rows');
+            }
+            
+            const headers = parseCSVLine(lines[0]).map(header => header.replace(/"/g, '').trim());
+            
+            // Validate required columns
+            const columnIndexes = findColumnIndexes(headers);
+            if (!columnIndexes.valid) {
+                throw new Error(columnIndexes.error);
+            }
+            
+            // Extract metadata from filename
+            const metadata = extractMetadataFromFilename(fileName);
+            
+            // Calculate metrics
+            const metrics = calculateMetrics(lines, columnIndexes);
+            
+            // Display results
+            displayResults(metadata, metrics);
+            
+            // Add interactivity
+            addResultInteractivity(metrics.missingIds, metadata.campaignName);
+            
+        } catch (error) {
+            showError(`Failed to analyze the data: ${error.message}`);
+            console.error('Data processing error:', error);
+        }
+    }
+    
+    /**
+     * Find column indexes for required data
+     */
+    function findColumnIndexes(headers) {
         const uniqueIdIndex = headers.findIndex(h => h.toLowerCase() === 'uniqueid' || h.toLowerCase() === 'id');
         const impressionCountIndex = headers.findIndex(h => h.toLowerCase() === 'impression_count');
         const eventCountFinishedIndex = headers.findIndex(h => h.toLowerCase() === 'event_count_finished');
         
-        // Check if required columns exist
-        if (uniqueIdIndex === -1 || impressionCountIndex === -1 || eventCountFinishedIndex === -1) {
-            resultsContainer.innerHTML = `
-                <div class="error">
-                    <p>Error: Required columns not found in CSV.</p>
-                    <p>Please ensure your CSV contains: uniqueid/id, impression_count, and event_count_finished columns.</p>
-                </div>
-            `;
-            return;
+        if (uniqueIdIndex === -1) {
+            return { valid: false, error: 'Required column "uniqueid" or "id" not found' };
         }
-
+        
+        if (impressionCountIndex === -1) {
+            return { valid: false, error: 'Required column "impression_count" not found' };
+        }
+        
+        if (eventCountFinishedIndex === -1) {
+            return { valid: false, error: 'Required column "event_count_finished" not found' };
+        }
+        
         // Find event columns (ones that start with "event_" but not event_count_finished)
         const eventColumnIndexes = headers
             .map((header, index) => ({ header, index }))
             .filter(item => item.header.toLowerCase().startsWith('event_') && 
                    item.header.toLowerCase() !== 'event_count_finished');
-
-        // Extract campaign name and date from filename - with robust pattern matching
+        
+        return {
+            valid: true,
+            uniqueIdIndex,
+            impressionCountIndex,
+            eventCountFinishedIndex,
+            eventColumnIndexes
+        };
+    }
+    
+    /**
+     * Extract campaign name and date from filename
+     */
+    function extractMetadataFromFilename(fileName) {
         let campaignName = "Unknown Campaign";
         let dateStr = '';
         let displayDate = '';
@@ -106,9 +205,6 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Pattern matching for different filename formats
             if (nameWithoutExt.includes(' - ')) {
-                // Format: "Campaign Name DD_MM_YYYY - DD_MM_YYYY"
-                // or "Campaign Name YYYY-MM-DD"
-                
                 // Check for date range pattern with underscores: DD_MM_YYYY - DD_MM_YYYY
                 const dateRangeMatch = nameWithoutExt.match(/(\d{2}_\d{2}_\d{4})\s*-\s*(\d{2}_\d{2}_\d{4})/);
                 
@@ -162,15 +258,27 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!displayDate) {
             displayDate = "Unknown Date";
         }
-
-        // Process the data
+        
+        return {
+            campaignName,
+            dateStr,
+            displayDate
+        };
+    }
+    
+    /**
+     * Calculate metrics from the CSV data
+     */
+    function calculateMetrics(lines, columnIndexes) {
+        const { uniqueIdIndex, impressionCountIndex, eventCountFinishedIndex, eventColumnIndexes } = columnIndexes;
+        
         let totalUsers = 0;
         let totalImpressions = 0;
         let uniqueImpressions = 0;
         let totalCompleted = 0;
-        let eventSums = {};
         
         // Initialize event sums
+        let eventSums = {};
         eventColumnIndexes.forEach(item => {
             eventSums[item.header] = 0;
         });
@@ -189,7 +297,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const columns = parseCSVLine(lines[i]);
             if (columns.length <= 1) continue; // Skip invalid lines
             
-            const uniqueId = columns[uniqueIdIndex].replace(/"/g, '').trim();
+            const uniqueId = columns[uniqueIdIndex]?.replace(/"/g, '').trim() || '';
+            if (!uniqueId) continue; // Skip rows without an ID
+            
             const isX001User = uniqueId === 'X001';
             
             // Check for MissingID pattern
@@ -206,7 +316,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             // Count impressions (exclude X001)
-            const impressionCount = parseInt(columns[impressionCountIndex].replace(/"/g, '')) || 0;
+            const impressionCount = parseInt(columns[impressionCountIndex]?.replace(/"/g, '')) || 0;
             if (impressionCount > 0) {
                 if (!isX001User) {
                     totalImpressions += impressionCount;
@@ -215,37 +325,39 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             // Count completed views (exclude X001)
-            const finishedCount = parseInt(columns[eventCountFinishedIndex].replace(/"/g, '')) || 0;
+            const finishedCount = parseInt(columns[eventCountFinishedIndex]?.replace(/"/g, '')) || 0;
             if (finishedCount > 0 && !isX001User) {
                 totalCompleted++;
             }
             
             // Sum other event columns (include ALL users, even X001)
             eventColumnIndexes.forEach(item => {
-                const value = parseInt(columns[item.index].replace(/"/g, '')) || 0;
+                const value = parseInt(columns[item.index]?.replace(/"/g, '')) || 0;
                 eventSums[item.header] += value;
             });
         }
         
         totalUsers = uniqueUsers.size;
         
-        // Store raw values for copying
-        const rawValues = {
-            'Total Users': totalUsers,
-            'Total Impressions': totalImpressions,
-            'Unique Impressions': uniqueImpressions,
-            'Completions': totalCompleted,
-            'Missing IDs': missingIdCount
+        return {
+            totalUsers,
+            totalImpressions,
+            uniqueImpressions,
+            totalCompleted,
+            eventSums,
+            missingIds,
+            missingIdCount
         };
+    }
+    
+    /**
+     * Display calculated results in the UI
+     */
+    function displayResults(metadata, metrics) {
+        const { campaignName, displayDate } = metadata;
+        const { totalUsers, totalImpressions, uniqueImpressions, totalCompleted, eventSums, missingIdCount } = metrics;
         
-        // Add event raw values
-        for (const [header, sum] of Object.entries(eventSums)) {
-            const displayName = header.replace(/^event_count_/, '');
-            const formattedName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
-            rawValues[formattedName] = sum;
-        }
-        
-        // Display calculated results
+        // Create HTML for main metrics
         let resultsHTML = `
             <div class="file-info">
                 <strong>Campaign:</strong> ${campaignName}
@@ -301,7 +413,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         resultsContainer.innerHTML = resultsHTML;
-        
+    }
+    
+    /**
+     * Add interactivity to the result cards
+     */
+    function addResultInteractivity(missingIds, campaignName) {
         // Add click-to-copy functionality to all result cards
         document.querySelectorAll('.result-card').forEach(card => {
             card.style.cursor = 'pointer';
@@ -325,36 +442,51 @@ document.addEventListener('DOMContentLoaded', () => {
                     })
                     .catch(err => {
                         console.error('Could not copy text: ', err);
+                        showError('Failed to copy to clipboard');
                     });
             });
         });
         
         // Add download functionality for missing IDs if any found
-        if (missingIdCount > 0) {
+        if (missingIds && missingIds.length > 0) {
             const downloadBtn = document.getElementById('downloadMissingIds');
-            downloadBtn.addEventListener('click', function(e) {
-                e.stopPropagation(); // Prevent triggering the copy functionality
-                
-                // Create CSV content
-                const csvContent = 'MissingID\n' + missingIds.join('\n');
-                
-                // Create download link
-                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.setAttribute('href', url);
-                link.setAttribute('download', `missing_ids_${campaignName.replace(/\s+/g, '_')}.csv`);
-                link.style.visibility = 'hidden';
-                
-                // Add to document, click and remove
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            });
+            if (downloadBtn) {
+                downloadBtn.addEventListener('click', function(e) {
+                    e.stopPropagation(); // Prevent triggering the copy functionality
+                    
+                    try {
+                        // Create CSV content
+                        const csvContent = 'MissingID\n' + missingIds.join('\n');
+                        
+                        // Create download link
+                        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.setAttribute('href', url);
+                        link.setAttribute('download', `missing_ids_${campaignName.replace(/\s+/g, '_')}.csv`);
+                        link.style.visibility = 'hidden';
+                        
+                        // Add to document, click and remove
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        
+                        // Release the blob URL
+                        setTimeout(() => {
+                            URL.revokeObjectURL(url);
+                        }, 100);
+                    } catch (error) {
+                        console.error('Failed to download missing IDs:', error);
+                        showError('Failed to download missing IDs');
+                    }
+                });
+            }
         }
     }
 
-    // Helper function to properly parse CSV lines with quoted fields
+    /**
+     * Helper function to properly parse CSV lines with quoted fields
+     */
     function parseCSVLine(line) {
         const result = [];
         let start = 0;
@@ -372,6 +504,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Add the last field
         result.push(line.substring(start));
         
-        return result;
+        return result.map(field => field.trim());
     }
 }); 

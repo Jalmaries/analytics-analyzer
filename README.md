@@ -1,42 +1,65 @@
 # Analytics Data Analyzer
 
-A simple web application that allows you to upload CSV files containing analytics data and process them according to specific requirements.
+A web-based tool for processing and analyzing marketing analytics CSV data with a focus on extracting key performance metrics.
 
 ## Features
 
-- Upload CSV files via drag-and-drop or file selection
-- Automatically analyze data based on predefined metrics
-- Calculate unique user count (excluding users with ID "X001")
-- Calculate total impressions (sum of impression_count, excluding X001 users)
-- Calculate unique impressions (count of users with impression_count > 0, excluding X001 users)
-- Calculate event_count_finished (count of users with event_count_finished > 0, excluding X001 users)
-- Sum all other event_ prefixed columns (including all users, even X001)
-- Responsive design that works on all devices
+- **CSV File Processing**: Upload CSV files via drag-and-drop or file selection
+- **Key Metrics Calculation**:
+  - Total Users (excluding users with ID "X001")
+  - Total Impressions (sum of impression_count, excluding X001 users)
+  - Unique Impressions (count of users with impression_count > 0, excluding X001 users)
+  - Completions (count of users with event_count_finished > 0, excluding X001 users)
+  - Various event metrics (all users included, even X001)
+- **MissingID Detection**: Identifies and counts records with "MissingID-" prefix
+- **Data Export**: Download CSV files containing extracted MissingIDs
+- **One-Click Copy**: Click on any metric to copy its raw value to clipboard
+- **Smart Filename Parsing**: Automatically extracts campaign names and dates from filenames
 
 ## How to Use
 
-1. Open the index.html file in your web browser
-2. Drag and drop a CSV file onto the designated area or click to select a file
-3. The application will automatically process the data and display results
-4. Results will show counts and sums according to the requirements
+1. Open the `index.html` file in your web browser
+2. Upload a CSV file using one of the following methods:
+   - Drag and drop the file onto the designated area
+   - Click the "Select File" button and choose a file
+3. View the analysis results in the dashboard
+4. Click on any metric card to copy its raw value to clipboard
+5. If MissingIDs are detected, use the "Download List" button to export them
 
-## CSV File Requirements
+## Project Structure
 
-Your CSV file should include the following columns:
-- `uniqueid` or `id`: A unique identifier for each user
-- `impression_count`: The number of impressions for each user
-- `event_count_finished`: Count of finished events for each user
-- Other columns with the prefix `event_` will also be summed (these will include all users)
+- `index.html`: The main HTML file containing the structure of the application
+- `styles.css`: Contains all styling for the application
+- `script.js`: JavaScript code for processing CSV files and calculating metrics
 
-## Processing Rules
+## CSV Format Requirements
 
-- Users with ID "X001" are excluded from the following calculations:
-  - Unique user count
-  - Total impressions
-  - Unique impressions
-  - Event count finished
-- All users (including X001) are included when summing other event_ prefixed columns
+The application expects CSV files with the following columns:
+- `uniqueid` or `id`: Unique identifier for each user
+- `impression_count`: Number of impressions for each user
+- `event_count_finished`: Number of completed views
 
-## Technology
+Additional `event_` prefixed columns will be included in the analysis.
 
-This application is built using pure HTML, CSS, and JavaScript without any external dependencies or server requirements. 
+## Special ID Handling
+
+- Records with ID "X001" are excluded from user counts, impressions, and completions
+- IDs starting with "MissingID-" are tracked and can be exported separately
+
+## Development
+
+This project uses vanilla JavaScript, HTML and CSS without any external dependencies, making it easy to run locally without any setup.
+
+### Extending the Application
+
+To add new features:
+1. Modify the HTML structure in `index.html`
+2. Add necessary styles in `styles.css`
+3. Implement functionality in `script.js`
+
+Key JavaScript functions:
+- `processData()`: Main data processing entry point
+- `calculateMetrics()`: Handles calculations of all metrics
+- `extractMetadataFromFilename()`: Parses campaign names and dates
+- `findColumnIndexes()`: Locates required data columns
+- `displayResults()`: Renders analysis results 
