@@ -178,6 +178,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Count unique users (excluding X001)
         const uniqueUsers = new Set();
         
+        // Track MissingIDs
+        const missingIds = [];
+        let missingIdCount = 0;
+        
         // Process data rows
         for (let i = 1; i < lines.length; i++) {
             if (!lines[i].trim()) continue; // Skip empty lines
@@ -187,6 +191,14 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const uniqueId = columns[uniqueIdIndex].replace(/"/g, '').trim();
             const isX001User = uniqueId === 'X001';
+            
+            // Check for MissingID pattern
+            if (uniqueId.startsWith('MissingID-')) {
+                missingIdCount++;
+                // Extract the hash part (without the MissingID- prefix)
+                const idHash = uniqueId.replace('MissingID-', '');
+                missingIds.push(idHash);
+            }
             
             // Add to unique users only if not X001
             if (!isX001User) {
@@ -222,7 +234,8 @@ document.addEventListener('DOMContentLoaded', () => {
             'Total Users': totalUsers,
             'Total Impressions': totalImpressions,
             'Unique Impressions': uniqueImpressions,
-            'Completions': totalCompleted
+            'Completions': totalCompleted,
+            'Missing IDs': missingIdCount
         };
         
         // Add event raw values
@@ -260,6 +273,17 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `;
         
+        // Add missing ID card if any found
+        if (missingIdCount > 0) {
+            resultsHTML += `
+                <div class="result-card missing-id-card" data-raw-value="${missingIdCount}">
+                    <h3>Missing IDs</h3>
+                    <p>${missingIdCount}</p>
+                    <button id="downloadMissingIds" class="download-btn">Download List</button>
+                </div>
+            `;
+        }
+        
         // Add other event counts
         for (const [header, sum] of Object.entries(eventSums)) {
             // Format the display name: remove event_count_ prefix and capitalize first letter
@@ -283,15 +307,16 @@ document.addEventListener('DOMContentLoaded', () => {
             card.style.cursor = 'pointer';
             card.title = "Click to copy value";
             
-            card.addEventListener('click', function() {
+            card.addEventListener('click', function(e) {
+                // Don't trigger for button clicks
+                if (e.target.tagName === 'BUTTON') return;
+                
                 const rawValue = this.dataset.rawValue;
                 navigator.clipboard.writeText(rawValue)
                     .then(() => {
-                        // Visual feedback - use yellow tone instead of green
+                        // Visual feedback - use yellow tone
                         const originalBackground = this.style.backgroundColor;
                         this.style.backgroundColor = '#fff9c4'; // Light yellow tone
-                        
-                        // Remove the tooltip creation entirely
                         
                         // Restore background after 1.5 seconds
                         setTimeout(() => {
@@ -303,6 +328,30 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
             });
         });
+        
+        // Add download functionality for missing IDs if any found
+        if (missingIdCount > 0) {
+            const downloadBtn = document.getElementById('downloadMissingIds');
+            downloadBtn.addEventListener('click', function(e) {
+                e.stopPropagation(); // Prevent triggering the copy functionality
+                
+                // Create CSV content
+                const csvContent = 'MissingID\n' + missingIds.join('\n');
+                
+                // Create download link
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.setAttribute('href', url);
+                link.setAttribute('download', `missing_ids_${campaignName.replace(/\s+/g, '_')}.csv`);
+                link.style.visibility = 'hidden';
+                
+                // Add to document, click and remove
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            });
+        }
     }
 
     // Helper function to properly parse CSV lines with quoted fields
