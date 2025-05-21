@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics Analyzer</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Analytics Analyzer</h1>
+            <p>Upload your CSV to view campaign metrics</p>
+        </header>
+        
+        <div class="upload-section">
+            <div class="drop-area" id="dropArea">
+                <div class="drop-content">
+                    <p>Drag & drop your CSV file here</p>
+                    <p class="divider">or</p>
+                    <button id="selectFileBtn" class="file-input-button">Select File</button>
+                </div>
+                <input type="file" id="fileInput" accept=".csv" hidden>
+            </div>
+        </div>
+
+        <div class="results-section" id="resultsSection">
+            <h2>Campaign Metrics</h2>
+            <div class="results-container" id="resultsContainer">
+                <!-- Results will be displayed here -->
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html> 
