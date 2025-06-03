@@ -9,10 +9,11 @@ body {
     background-color: #f5f7fa;
     color: #333;
     line-height: 1.6;
+    font-size: 16px;
 }
 
 .container {
-    max-width: 1000px;
+    max-width: 1200px;
     margin: 0 auto;
     padding: 20px;
 }
@@ -87,16 +88,19 @@ header h1 {
 .file-input-button {
     background-color: #3498db;
     color: white;
-    padding: 10px 20px;
+    padding: 12px 24px;
     border: none;
-    border-radius: 5px;
+    border-radius: 6px;
     cursor: pointer;
     font-size: 16px;
-    transition: background-color 0.3s ease;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    min-height: 44px;
 }
 
 .file-input-button:hover {
     background-color: #2980b9;
+    transform: translateY(-1px);
 }
 
 .results-section {
@@ -115,18 +119,23 @@ header h1 {
 
 .results-container {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(4, 1fr);
     gap: 20px;
 }
 
 .result-card {
     background-color: #f8f9fa;
     border-radius: 8px;
-    padding: 15px;
+    padding: 16px;
     text-align: center;
     border-left: 4px solid #3498db;
     position: relative;
     transition: background-color 0.3s ease;
+    overflow: hidden;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    min-height: 120px;
 }
 
 .result-card:hover {
@@ -134,15 +143,47 @@ header h1 {
 }
 
 .result-card h3 {
-    font-size: 16px;
+    font-size: 15px;
     margin-bottom: 10px;
     color: #34495e;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    line-height: 1.3;
+    min-height: 2.6em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+}
+
+.result-card small {
+    font-size: 13px;
+    color: #7f8c8d;
+    display: block;
+    margin-top: 6px;
+    margin-bottom: 10px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.3;
+    font-style: italic;
 }
 
 .result-card p {
     font-size: 24px;
     font-weight: bold;
     color: #2c3e50;
+    margin: 10px 0;
+    line-height: 1.2;
+}
+
+.result-card .bottom-text {
+    font-size: 13px;
+    color: #7f8c8d;
+    margin-top: 10px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.3;
 }
 
 .missing-id-card {
@@ -153,26 +194,30 @@ header h1 {
     background-color: #e74c3c;
     color: white;
     border: none;
-    border-radius: 4px;
-    padding: 6px 12px;
-    margin-top: 8px;
+    border-radius: 6px;
+    padding: 10px 16px;
+    margin-top: 10px;
     font-size: 14px;
+    font-weight: 500;
     cursor: pointer;
-    transition: background-color 0.3s ease;
+    transition: all 0.3s ease;
+    min-height: 40px;
 }
 
 .download-btn:hover {
     background-color: #c0392b;
+    transform: translateY(-1px);
 }
 
 .file-info {
     margin-top: 20px;
-    padding: 15px;
+    padding: 18px;
     background-color: #f1f2f6;
-    border-radius: 8px;
+    border-radius: 10px;
     text-align: center;
     grid-column: 1 / -1;
-    margin-bottom: 10px;
+    margin-bottom: 15px;
+    font-size: 16px;
 }
 
 .processing {
@@ -208,16 +253,134 @@ header h1 {
 }
 
 .error {
-    padding: 15px;
+    padding: 18px;
     background-color: #fdeded;
     border-left: 4px solid #e74c3c;
-    border-radius: 8px;
+    border-radius: 10px;
     margin-bottom: 20px;
     color: #c0392b;
+    font-size: 16px;
+}
+
+@media (max-width: 1200px) {
+    .results-container {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 18px;
+    }
+    
+    .result-card {
+        padding: 15px;
+        min-height: 115px;
+    }
+    
+    .result-card h3 {
+        font-size: 14px;
+    }
+    
+    .result-card p {
+        font-size: 23px;
+    }
+}
+
+@media (max-width: 900px) {
+    .results-container {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 16px;
+    }
+    
+    .result-card {
+        padding: 16px;
+        min-height: 120px;
+    }
+    
+    .result-card h3 {
+        font-size: 15px;
+    }
+    
+    .result-card p {
+        font-size: 24px;
+    }
 }
 
 @media (max-width: 768px) {
+    .container {
+        padding: 15px;
+    }
+    
+    .results-container {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 15px;
+    }
+    
+    .result-card {
+        padding: 14px;
+        min-height: 110px;
+    }
+    
+    .result-card h3 {
+        font-size: 14px;
+        min-height: auto;
+        margin-bottom: 8px;
+    }
+    
+    .result-card p {
+        font-size: 22px;
+    }
+    
+    .result-card small {
+        font-size: 11px;
+    }
+    
+    .result-card .bottom-text {
+        font-size: 11px;
+    }
+    
+    .download-btn {
+        padding: 8px 12px;
+        font-size: 12px;
+        min-height: 34px;
+    }
+    
+    .file-input-button {
+        padding: 10px 18px;
+        font-size: 14px;
+        min-height: 38px;
+    }
+}
+
+@media (max-width: 480px) {
     .results-container {
         grid-template-columns: 1fr;
+        gap: 12px;
+    }
+    
+    .result-card {
+        padding: 14px;
+        min-height: 105px;
+    }
+    
+    .result-card h3 {
+        font-size: 13px;
+        line-height: 1.3;
+    }
+    
+    .result-card p {
+        font-size: 20px;
+    }
+    
+    .result-card small, .result-card .bottom-text {
+        font-size: 10px;
+    }
+    
+    .download-btn {
+        padding: 8px 12px;
+        font-size: 12px;
+        min-height: 32px;
+    }
+    
+    .file-input-button {
+        padding: 10px 16px;
+        font-size: 14px;
+        min-height: 36px;
     }
 } 

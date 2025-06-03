@@ -185,12 +185,20 @@ document.addEventListener('DOMContentLoaded', () => {
             .filter(item => item.header.toLowerCase().startsWith('event_') && 
                    item.header.toLowerCase() !== 'event_count_finished');
         
+        // Find optional sum metrics columns
+        const thumbnailCountIndex = headers.findIndex(h => h.toLowerCase() === 'thumbnail_count');
+        const visitCountIndex = headers.findIndex(h => h.toLowerCase() === 'visit_count');
+        const playCountIndex = headers.findIndex(h => h.toLowerCase() === 'play_count');
+        
         return {
             valid: true,
             uniqueIdIndex,
             impressionCountIndex,
             eventCountFinishedIndex,
-            eventColumnIndexes
+            eventColumnIndexes,
+            thumbnailCountIndex: thumbnailCountIndex !== -1 ? thumbnailCountIndex : null,
+            visitCountIndex: visitCountIndex !== -1 ? visitCountIndex : null,
+            playCountIndex: playCountIndex !== -1 ? playCountIndex : null
         };
     }
     
@@ -273,12 +281,19 @@ document.addEventListener('DOMContentLoaded', () => {
      * Calculate metrics from the CSV data
      */
     function calculateMetrics(lines, columnIndexes) {
-        const { uniqueIdIndex, impressionCountIndex, eventCountFinishedIndex, eventColumnIndexes } = columnIndexes;
+        const { uniqueIdIndex, impressionCountIndex, eventCountFinishedIndex, eventColumnIndexes, 
+                thumbnailCountIndex, visitCountIndex, playCountIndex } = columnIndexes;
         
         let totalUsers = 0;
         let totalImpressions = 0;
         let uniqueImpressions = 0;
-        let totalCompleted = 0;
+        let totalContentFinished = 0; // Sum of all finished events
+        let uniqueContentFinishes = 0; // Count of unique users who finished
+        
+        // Optional sum metrics
+        let totalThumbnailCount = 0;
+        let totalVisitCount = 0;
+        let totalPlayCount = 0;
         
         // Initialize event sums
         let eventSums = {};
@@ -335,10 +350,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
             
-            // Count completed views (exclude test users)
+            // Count content finished metrics (exclude test users)
             const finishedCount = parseInt(columns[eventCountFinishedIndex]?.replace(/"/g, '')) || 0;
-            if (finishedCount > 0 && !isTestUser) {
-                totalCompleted++;
+            if (!isTestUser) {
+                // Add to total content finished (sum of all finished events)
+                totalContentFinished += finishedCount;
+                
+                // Count unique users who finished at least once
+                if (finishedCount > 0) {
+                    uniqueContentFinishes++;
+                }
+            }
+            
+            // Calculate optional sum metrics (exclude test users)
+            if (!isTestUser) {
+                if (thumbnailCountIndex !== null) {
+                    const thumbnailCount = parseInt(columns[thumbnailCountIndex]?.replace(/"/g, '')) || 0;
+                    totalThumbnailCount += thumbnailCount;
+                }
+                
+                if (visitCountIndex !== null) {
+                    const visitCount = parseInt(columns[visitCountIndex]?.replace(/"/g, '')) || 0;
+                    totalVisitCount += visitCount;
+                }
+                
+                if (playCountIndex !== null) {
+                    const playCount = parseInt(columns[playCountIndex]?.replace(/"/g, '')) || 0;
+                    totalPlayCount += playCount;
+                }
             }
             
             // Sum other event columns (include ALL users, even test users)
@@ -354,7 +393,11 @@ document.addEventListener('DOMContentLoaded', () => {
             totalUsers,
             totalImpressions,
             uniqueImpressions,
-            totalCompleted,
+            totalContentFinished,
+            uniqueContentFinishes,
+            totalThumbnailCount: thumbnailCountIndex !== null ? totalThumbnailCount : null,
+            totalVisitCount: visitCountIndex !== null ? totalVisitCount : null,
+            totalPlayCount: playCountIndex !== null ? totalPlayCount : null,
             eventSums,
             missingIds,
             missingIdCount,
@@ -367,7 +410,8 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function displayResults(metadata, metrics) {
         const { campaignName, displayDate } = metadata;
-        const { totalUsers, totalImpressions, uniqueImpressions, totalCompleted, eventSums, missingIdCount, foundTestUsers } = metrics;
+        const { totalUsers, totalImpressions, uniqueImpressions, totalContentFinished, uniqueContentFinishes, 
+                totalThumbnailCount, totalVisitCount, totalPlayCount, eventSums, missingIdCount, foundTestUsers } = metrics;
         
         // Create the test user exclusion message
         const testUserMessage = foundTestUsers.length > 0 
@@ -395,12 +439,48 @@ document.addEventListener('DOMContentLoaded', () => {
                 <p>${uniqueImpressions}</p>
                 <small>${testUserMessage}</small>
             </div>
-            <div class="result-card" data-raw-value="${totalCompleted}">
-                <h3>Completions</h3>
-                <p>${totalCompleted}</p>
+            <div class="result-card" data-raw-value="${totalContentFinished}">
+                <h3>Content Finished</h3>
+                <p>${totalContentFinished}</p>
+                <small>${testUserMessage}</small>
+            </div>
+            <div class="result-card" data-raw-value="${uniqueContentFinishes}">
+                <h3>Unique Content Finishes</h3>
+                <p>${uniqueContentFinishes}</p>
                 <small>${testUserMessage}</small>
             </div>
         `;
+        
+        // Add optional sum metrics if they exist and have data
+        if (totalThumbnailCount !== null && totalThumbnailCount > 0) {
+            resultsHTML += `
+                <div class="result-card" data-raw-value="${totalThumbnailCount}">
+                    <h3>Thumbnail Count</h3>
+                    <p>${totalThumbnailCount}</p>
+                    <small>${testUserMessage}</small>
+                </div>
+            `;
+        }
+        
+        if (totalVisitCount !== null && totalVisitCount > 0) {
+            resultsHTML += `
+                <div class="result-card" data-raw-value="${totalVisitCount}">
+                    <h3>Visit Count</h3>
+                    <p>${totalVisitCount}</p>
+                    <small>${testUserMessage}</small>
+                </div>
+            `;
+        }
+        
+        if (totalPlayCount !== null && totalPlayCount > 0) {
+            resultsHTML += `
+                <div class="result-card" data-raw-value="${totalPlayCount}">
+                    <h3>Play Count</h3>
+                    <p>${totalPlayCount}</p>
+                    <small>${testUserMessage}</small>
+                </div>
+            `;
+        }
         
         // Add missing ID card if any found
         if (missingIdCount > 0) {
@@ -424,7 +504,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <h3>${formattedName}</h3>
                     <small>(${header})</small>
                     <p>${sum}</p>
-                    <small>Including ALL users</small>
+                    <small class="bottom-text">Including ALL users</small>
                 </div>
             `;
         }
