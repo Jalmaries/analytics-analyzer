@@ -5,6 +5,9 @@
  * calculates key metrics, and visualizes the results.
  */
 
+// Configuration: Test user IDs to exclude from main metrics
+const TEST_USER_IDS = ['X001', 'PH123', 'OMMATEST'];
+
 document.addEventListener('DOMContentLoaded', () => {
     // DOM Elements
     const dropArea = document.getElementById('dropArea');
@@ -283,12 +286,15 @@ document.addEventListener('DOMContentLoaded', () => {
             eventSums[item.header] = 0;
         });
         
-        // Count unique users (excluding X001)
+        // Count unique users (excluding test users)
         const uniqueUsers = new Set();
         
         // Track MissingIDs
         const missingIds = [];
         let missingIdCount = 0;
+        
+        // Track which test users are actually found in the data
+        const foundTestUsers = new Set();
         
         // Process data rows
         for (let i = 1; i < lines.length; i++) {
@@ -300,7 +306,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const uniqueId = columns[uniqueIdIndex]?.replace(/"/g, '').trim() || '';
             if (!uniqueId) continue; // Skip rows without an ID
             
-            const isX001User = uniqueId === 'X001';
+            const isTestUser = TEST_USER_IDS.includes(uniqueId);
+            
+            // Track found test users
+            if (isTestUser) {
+                foundTestUsers.add(uniqueId);
+            }
             
             // Check for MissingID pattern
             if (uniqueId.startsWith('MissingID-')) {
@@ -310,27 +321,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 missingIds.push(idHash);
             }
             
-            // Add to unique users only if not X001
-            if (!isX001User) {
+            // Add to unique users only if not a test user
+            if (!isTestUser) {
                 uniqueUsers.add(uniqueId);
             }
             
-            // Count impressions (exclude X001)
+            // Count impressions (exclude test users)
             const impressionCount = parseInt(columns[impressionCountIndex]?.replace(/"/g, '')) || 0;
             if (impressionCount > 0) {
-                if (!isX001User) {
+                if (!isTestUser) {
                     totalImpressions += impressionCount;
                     uniqueImpressions++;
                 }
             }
             
-            // Count completed views (exclude X001)
+            // Count completed views (exclude test users)
             const finishedCount = parseInt(columns[eventCountFinishedIndex]?.replace(/"/g, '')) || 0;
-            if (finishedCount > 0 && !isX001User) {
+            if (finishedCount > 0 && !isTestUser) {
                 totalCompleted++;
             }
             
-            // Sum other event columns (include ALL users, even X001)
+            // Sum other event columns (include ALL users, even test users)
             eventColumnIndexes.forEach(item => {
                 const value = parseInt(columns[item.index]?.replace(/"/g, '')) || 0;
                 eventSums[item.header] += value;
@@ -346,7 +357,8 @@ document.addEventListener('DOMContentLoaded', () => {
             totalCompleted,
             eventSums,
             missingIds,
-            missingIdCount
+            missingIdCount,
+            foundTestUsers: Array.from(foundTestUsers)
         };
     }
     
@@ -355,7 +367,12 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function displayResults(metadata, metrics) {
         const { campaignName, displayDate } = metadata;
-        const { totalUsers, totalImpressions, uniqueImpressions, totalCompleted, eventSums, missingIdCount } = metrics;
+        const { totalUsers, totalImpressions, uniqueImpressions, totalCompleted, eventSums, missingIdCount, foundTestUsers } = metrics;
+        
+        // Create the test user exclusion message
+        const testUserMessage = foundTestUsers.length > 0 
+            ? `Excluding test users: ${foundTestUsers.join(', ')}`
+            : 'There are no test users';
         
         // Create HTML for main metrics
         let resultsHTML = `
@@ -366,22 +383,22 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="result-card" data-raw-value="${totalUsers}">
                 <h3>Total Users</h3>
                 <p>${totalUsers.toLocaleString()}</p>
-                <small>Excluding users with ID X001</small>
+                <small>${testUserMessage}</small>
             </div>
             <div class="result-card" data-raw-value="${totalImpressions}">
                 <h3>Total Impressions</h3>
                 <p>${totalImpressions}</p>
-                <small>Excluding users with ID X001</small>
+                <small>${testUserMessage}</small>
             </div>
             <div class="result-card" data-raw-value="${uniqueImpressions}">
                 <h3>Unique Impressions</h3>
                 <p>${uniqueImpressions}</p>
-                <small>Excluding users with ID X001</small>
+                <small>${testUserMessage}</small>
             </div>
             <div class="result-card" data-raw-value="${totalCompleted}">
                 <h3>Completions</h3>
                 <p>${totalCompleted}</p>
-                <small>Excluding users with ID X001</small>
+                <small>${testUserMessage}</small>
             </div>
         `;
         
