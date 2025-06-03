@@ -8,6 +8,10 @@
 // Configuration: Test user IDs to exclude from main metrics
 const TEST_USER_IDS = ['X001', 'PH123', 'OMMATEST'];
 
+// Configuration: Interaction columns to check for unique interactions
+// If sum of these columns > 0 for a user, count as 1 unique interaction
+const INTERACTION_COLUMNS = ['event_count_answer_correct', 'event_count_answer_wrong', 'event_count_back_to_home', 'event_count_replay'];
+
 document.addEventListener('DOMContentLoaded', () => {
     // DOM Elements
     const dropArea = document.getElementById('dropArea');
@@ -190,6 +194,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const visitCountIndex = headers.findIndex(h => h.toLowerCase() === 'visit_count');
         const playCountIndex = headers.findIndex(h => h.toLowerCase() === 'play_count');
         
+        // Find interaction columns for unique interactions calculation
+        const interactionColumnIndexes = INTERACTION_COLUMNS
+            .map(columnName => {
+                const index = headers.findIndex(h => h.toLowerCase() === columnName.toLowerCase());
+                return index !== -1 ? { name: columnName, index } : null;
+            })
+            .filter(item => item !== null);
+        
         return {
             valid: true,
             uniqueIdIndex,
@@ -198,7 +210,8 @@ document.addEventListener('DOMContentLoaded', () => {
             eventColumnIndexes,
             thumbnailCountIndex: thumbnailCountIndex !== -1 ? thumbnailCountIndex : null,
             visitCountIndex: visitCountIndex !== -1 ? visitCountIndex : null,
-            playCountIndex: playCountIndex !== -1 ? playCountIndex : null
+            playCountIndex: playCountIndex !== -1 ? playCountIndex : null,
+            interactionColumnIndexes
         };
     }
     
@@ -282,13 +295,14 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function calculateMetrics(lines, columnIndexes) {
         const { uniqueIdIndex, impressionCountIndex, eventCountFinishedIndex, eventColumnIndexes, 
-                thumbnailCountIndex, visitCountIndex, playCountIndex } = columnIndexes;
+                thumbnailCountIndex, visitCountIndex, playCountIndex, interactionColumnIndexes } = columnIndexes;
         
         let totalUsers = 0;
         let totalImpressions = 0;
         let uniqueImpressions = 0;
         let totalContentFinished = 0; // Sum of all finished events
         let uniqueContentFinishes = 0; // Count of unique users who finished
+        let uniqueInteractions = 0; // Count of users with at least one interaction
         
         // Optional sum metrics
         let totalThumbnailCount = 0;
@@ -362,6 +376,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
             
+            // Calculate unique interactions (exclude test users)
+            if (!isTestUser && interactionColumnIndexes.length > 0) {
+                // Sum values from all interaction columns for this user
+                let interactionSum = 0;
+                interactionColumnIndexes.forEach(item => {
+                    const value = parseInt(columns[item.index]?.replace(/"/g, '')) || 0;
+                    interactionSum += value;
+                });
+                
+                // If sum > 0, count as 1 unique interaction (like Excel IF formula)
+                if (interactionSum > 0) {
+                    uniqueInteractions++;
+                }
+            }
+            
             // Calculate optional sum metrics (exclude test users)
             if (!isTestUser) {
                 if (thumbnailCountIndex !== null) {
@@ -395,6 +424,7 @@ document.addEventListener('DOMContentLoaded', () => {
             uniqueImpressions,
             totalContentFinished,
             uniqueContentFinishes,
+            uniqueInteractions: interactionColumnIndexes.length > 0 ? uniqueInteractions : null,
             totalThumbnailCount: thumbnailCountIndex !== null ? totalThumbnailCount : null,
             totalVisitCount: visitCountIndex !== null ? totalVisitCount : null,
             totalPlayCount: playCountIndex !== null ? totalPlayCount : null,
@@ -411,7 +441,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function displayResults(metadata, metrics) {
         const { campaignName, displayDate } = metadata;
         const { totalUsers, totalImpressions, uniqueImpressions, totalContentFinished, uniqueContentFinishes, 
-                totalThumbnailCount, totalVisitCount, totalPlayCount, eventSums, missingIdCount, foundTestUsers } = metrics;
+                uniqueInteractions, totalThumbnailCount, totalVisitCount, totalPlayCount, eventSums, missingIdCount, foundTestUsers } = metrics;
         
         // Create the test user exclusion message
         const testUserMessage = foundTestUsers.length > 0 
@@ -450,6 +480,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 <small>${testUserMessage}</small>
             </div>
         `;
+        
+        // Add unique interactions if interaction columns are found
+        if (uniqueInteractions !== null) {
+            resultsHTML += `
+                <div class="result-card" data-raw-value="${uniqueInteractions}">
+                    <h3>Unique Interactions</h3>
+                    <p>${uniqueInteractions}</p>
+                    <small>${testUserMessage}</small>
+                </div>
+            `;
+        }
         
         // Add optional sum metrics if they exist and have data
         if (totalThumbnailCount !== null && totalThumbnailCount > 0) {
