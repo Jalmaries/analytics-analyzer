@@ -10,7 +10,7 @@ const TEST_USER_IDS = ['X001', 'PH123', 'OMMATEST'];
 
 // Configuration: Interaction columns to check for unique interactions
 // If sum of these columns > 0 for a user, count as 1 unique interaction
-const INTERACTION_COLUMNS = ['event_count_answer_correct', 'event_count_answer_wrong', 'event_count_back_to_home', 'event_count_replay'];
+const INTERACTION_COLUMNS = ['event_count_answer_correct', 'event_count_answer_wrong', 'event_count_back_to_home', 'event_count_replay', 'event_count_scene2_earning_details', 'event_count_scene2_skip_details', 'event_count_scene5_availability', 'event_count_scene5_unique_packcodes', 'event_count_scene5_visibility', 'event_count_scene8_home_page', 'event_count_scene8_nps_campaign', 'event_count_scene8_service_catalog_stg', 'event_count_scene8_service_chargili'];
 
 document.addEventListener('DOMContentLoaded', () => {
     // DOM Elements
@@ -309,10 +309,12 @@ document.addEventListener('DOMContentLoaded', () => {
         let totalVisitCount = 0;
         let totalPlayCount = 0;
         
-        // Initialize event sums
+        // Initialize event sums and unique user tracking
         let eventSums = {};
+        let eventUniqueUserSets = {};
         eventColumnIndexes.forEach(item => {
             eventSums[item.header] = 0;
+            eventUniqueUserSets[item.header] = new Set();
         });
         
         // Count unique users (excluding test users)
@@ -413,10 +415,21 @@ document.addEventListener('DOMContentLoaded', () => {
             eventColumnIndexes.forEach(item => {
                 const value = parseInt(columns[item.index]?.replace(/"/g, '')) || 0;
                 eventSums[item.header] += value;
+                
+                // Track unique users for each event
+                if (value > 0) {
+                    eventUniqueUserSets[item.header].add(uniqueId);
+                }
             });
         }
         
         totalUsers = uniqueUsers.size;
+
+        // Convert sets of unique users to counts
+        const eventUniqueUserCounts = {};
+        for (const header of Object.keys(eventSums)) {
+            eventUniqueUserCounts[header] = eventUniqueUserSets[header].size;
+        }
         
         return {
             totalUsers,
@@ -429,6 +442,7 @@ document.addEventListener('DOMContentLoaded', () => {
             totalVisitCount: visitCountIndex !== null ? totalVisitCount : null,
             totalPlayCount: playCountIndex !== null ? totalPlayCount : null,
             eventSums,
+            eventUniqueUserCounts, // Add unique counts
             missingIds,
             missingIdCount,
             foundTestUsers: Array.from(foundTestUsers)
@@ -441,7 +455,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function displayResults(metadata, metrics) {
         const { campaignName, displayDate } = metadata;
         const { totalUsers, totalImpressions, uniqueImpressions, totalContentFinished, uniqueContentFinishes, 
-                uniqueInteractions, totalThumbnailCount, totalVisitCount, totalPlayCount, eventSums, missingIdCount, foundTestUsers } = metrics;
+                uniqueInteractions, totalThumbnailCount, totalVisitCount, totalPlayCount, eventSums, eventUniqueUserCounts, missingIdCount, foundTestUsers } = metrics;
         
         // Create the test user exclusion message
         const testUserMessage = foundTestUsers.length > 0 
@@ -470,7 +484,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <small>${testUserMessage}</small>
             </div>
             <div class="result-card" data-raw-value="${totalContentFinished}">
-                <h3>Content Finished</h3>
+                <h3>Content Finishes</h3>
                 <p>${totalContentFinished}</p>
                 <small>${testUserMessage}</small>
             </div>
@@ -536,9 +550,10 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Add other event counts
         for (const [header, sum] of Object.entries(eventSums)) {
-            // Format the display name: remove event_count_ prefix and apply proper title case
+            // Format the display name
             const displayName = header.replace(/^event_count_/, '');
             const formattedName = toTitleCase(displayName);
+            const uniqueCount = eventUniqueUserCounts[header] || 0;
             
             resultsHTML += `
                 <div class="result-card" data-raw-value="${sum}">
@@ -546,6 +561,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <small>(${header})</small>
                     <p>${sum}</p>
                     <small class="bottom-text">Including ALL users</small>
+                    <small class="bottom-text">(${uniqueCount.toLocaleString()} unique users)</small>
                 </div>
             `;
         }
