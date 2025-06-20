@@ -308,6 +308,9 @@ document.addEventListener('DOMContentLoaded', () => {
         let totalThumbnailCount = 0;
         let totalVisitCount = 0;
         let totalPlayCount = 0;
+        let uniqueThumbnailUsers = new Set();
+        let uniqueVisitUsers = new Set();
+        let uniquePlayUsers = new Set();
         
         // Initialize event sums and unique user tracking
         let eventSums = {};
@@ -398,16 +401,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (thumbnailCountIndex !== null) {
                     const thumbnailCount = parseInt(columns[thumbnailCountIndex]?.replace(/"/g, '')) || 0;
                     totalThumbnailCount += thumbnailCount;
+                    if (thumbnailCount > 0) {
+                        uniqueThumbnailUsers.add(uniqueId);
+                    }
                 }
                 
                 if (visitCountIndex !== null) {
                     const visitCount = parseInt(columns[visitCountIndex]?.replace(/"/g, '')) || 0;
                     totalVisitCount += visitCount;
+                    if (visitCount > 0) {
+                        uniqueVisitUsers.add(uniqueId);
+                    }
                 }
                 
                 if (playCountIndex !== null) {
                     const playCount = parseInt(columns[playCountIndex]?.replace(/"/g, '')) || 0;
                     totalPlayCount += playCount;
+                    if (playCount > 0) {
+                        uniquePlayUsers.add(uniqueId);
+                    }
                 }
             }
             
@@ -439,8 +451,11 @@ document.addEventListener('DOMContentLoaded', () => {
             uniqueContentFinishes,
             uniqueInteractions: interactionColumnIndexes.length > 0 ? uniqueInteractions : null,
             totalThumbnailCount: thumbnailCountIndex !== null ? totalThumbnailCount : null,
+            uniqueThumbnailCount: thumbnailCountIndex !== null ? uniqueThumbnailUsers.size : null,
             totalVisitCount: visitCountIndex !== null ? totalVisitCount : null,
+            uniqueVisitCount: visitCountIndex !== null ? uniqueVisitUsers.size : null,
             totalPlayCount: playCountIndex !== null ? totalPlayCount : null,
+            uniquePlayCount: playCountIndex !== null ? uniquePlayUsers.size : null,
             eventSums,
             eventUniqueUserCounts, // Add unique counts
             missingIds,
@@ -455,19 +470,15 @@ document.addEventListener('DOMContentLoaded', () => {
     function displayResults(metadata, metrics) {
         const { campaignName, displayDate } = metadata;
         const { totalUsers, totalImpressions, uniqueImpressions, totalContentFinished, uniqueContentFinishes, 
-                uniqueInteractions, totalThumbnailCount, totalVisitCount, totalPlayCount, eventSums, eventUniqueUserCounts, missingIdCount, foundTestUsers } = metrics;
+                uniqueInteractions, totalThumbnailCount, uniqueThumbnailCount, totalVisitCount, uniqueVisitCount, 
+                totalPlayCount, uniquePlayCount, eventSums, eventUniqueUserCounts, missingIdCount, foundTestUsers } = metrics;
         
-        // Create the test user exclusion message
         const testUserMessage = foundTestUsers.length > 0 
             ? `Excluding test users: ${foundTestUsers.join(', ')}`
             : 'There are no test users';
-        
-        // Create HTML for main metrics
-        let resultsHTML = `
-            <div class="file-info">
-                <strong>Campaign:</strong> ${campaignName}
-                ${displayDate ? `<br><strong>Date:</strong> ${displayDate}` : ''}
-            </div>
+
+        // --- Native Analytics Cards ---
+        let nativeCardsHTML = `
             <div class="result-card" data-raw-value="${totalUsers}">
                 <h3>Total Users</h3>
                 <p>${totalUsers.toLocaleString()}</p>
@@ -495,9 +506,8 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `;
         
-        // Add unique interactions if interaction columns are found
         if (uniqueInteractions !== null) {
-            resultsHTML += `
+            nativeCardsHTML += `
                 <div class="result-card" data-raw-value="${uniqueInteractions}">
                     <h3>Unique Interactions</h3>
                     <p>${uniqueInteractions}</p>
@@ -505,41 +515,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `;
         }
-        
-        // Add optional sum metrics if they exist and have data
-        if (totalThumbnailCount !== null && totalThumbnailCount > 0) {
-            resultsHTML += `
-                <div class="result-card" data-raw-value="${totalThumbnailCount}">
-                    <h3>Thumbnail Count</h3>
-                    <p>${totalThumbnailCount}</p>
-                    <small>${testUserMessage}</small>
-                </div>
-            `;
-        }
-        
+
         if (totalVisitCount !== null && totalVisitCount > 0) {
-            resultsHTML += `
+            nativeCardsHTML += `
                 <div class="result-card" data-raw-value="${totalVisitCount}">
                     <h3>Visit Count</h3>
                     <p>${totalVisitCount}</p>
                     <small>${testUserMessage}</small>
+                    <small class="bottom-text">(${uniqueVisitCount.toLocaleString()} unique users)</small>
                 </div>
             `;
         }
         
         if (totalPlayCount !== null && totalPlayCount > 0) {
-            resultsHTML += `
+            nativeCardsHTML += `
                 <div class="result-card" data-raw-value="${totalPlayCount}">
                     <h3>Play Count</h3>
                     <p>${totalPlayCount}</p>
                     <small>${testUserMessage}</small>
+                    <small class="bottom-text">(${uniquePlayCount.toLocaleString()} unique users)</small>
                 </div>
             `;
         }
         
-        // Add missing ID card if any found
         if (missingIdCount > 0) {
-            resultsHTML += `
+            nativeCardsHTML += `
                 <div class="result-card missing-id-card" data-raw-value="${missingIdCount}">
                     <h3>Missing IDs</h3>
                     <p>${missingIdCount}</p>
@@ -547,26 +547,60 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `;
         }
+
+        // --- Custom Analytics Cards ---
+        let customCardsHTML = '';
+
+        if (totalThumbnailCount !== null && totalThumbnailCount > 0) {
+            customCardsHTML += `
+                <div class="result-card" data-raw-value="${totalThumbnailCount}">
+                    <h3>Thumbnail Count</h3>
+                    <p>${totalThumbnailCount}</p>
+                    <small>${testUserMessage}</small>
+                    <small class="bottom-text">(${uniqueThumbnailCount.toLocaleString()} unique users)</small>
+                </div>
+            `;
+        }
         
-        // Add other event counts
         for (const [header, sum] of Object.entries(eventSums)) {
-            // Format the display name
             const displayName = header.replace(/^event_count_/, '');
             const formattedName = toTitleCase(displayName);
             const uniqueCount = eventUniqueUserCounts[header] || 0;
             
-            resultsHTML += `
+            customCardsHTML += `
                 <div class="result-card" data-raw-value="${sum}">
                     <h3>${formattedName}</h3>
-                    <small>(${header})</small>
+                    <small class="raw-header">(${header})</small>
                     <p>${sum}</p>
                     <small class="bottom-text">Including ALL users</small>
                     <small class="bottom-text">(${uniqueCount.toLocaleString()} unique users)</small>
                 </div>
             `;
         }
+
+        // --- Final Assembly ---
+        let finalHTML = `
+            <div class="file-info">
+                <strong>Campaign:</strong> ${campaignName}
+                ${displayDate ? `<br><strong>Date:</strong> ${displayDate}` : ''}
+            </div>
+        `;
+
+        if (nativeCardsHTML.trim() !== '') {
+            finalHTML += `
+                <h2 class="results-header">Native Analytics</h2>
+                <div class="results-container">${nativeCardsHTML}</div>
+            `;
+        }
+
+        if (customCardsHTML.trim() !== '') {
+            finalHTML += `
+                <h2 class="results-header">Custom Analytics Events</h2>
+                <div class="results-container">${customCardsHTML}</div>
+            `;
+        }
         
-        resultsContainer.innerHTML = resultsHTML;
+        resultsContainer.innerHTML = finalHTML;
     }
     
     /**
