@@ -536,9 +536,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Add other event counts
         for (const [header, sum] of Object.entries(eventSums)) {
-            // Format the display name: remove event_count_ prefix and capitalize first letter
+            // Format the display name: remove event_count_ prefix and apply proper title case
             const displayName = header.replace(/^event_count_/, '');
-            const formattedName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
+            const formattedName = toTitleCase(displayName);
             
             resultsHTML += `
                 <div class="result-card" data-raw-value="${sum}">
@@ -643,5 +643,48 @@ document.addEventListener('DOMContentLoaded', () => {
         result.push(line.substring(start));
         
         return result.map(field => field.trim());
+    }
+
+    /**
+     * Convert a string to proper title case with special rules
+     * - Replace consecutive underscores with spaces
+     * - Capitalize all words except articles, prepositions, and conjunctions (unless first/last word)
+     * - Handle special abbreviations that should remain uppercase
+     */
+    function toTitleCase(str) {
+        // Articles, prepositions, and conjunctions that shouldn't be capitalized (unless first/last word)
+        const lowercaseWords = new Set([
+            'a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'if', 'in', 'nor', 'of', 'on', 'or', 'so', 'the', 'to', 'up', 'yet'
+        ]);
+        
+        // Special abbreviations that should remain uppercase
+        const uppercaseAbbreviations = new Set([
+            'tts', 'ai', 'api', 'url', 'html', 'css', 'js', 'id', 'ui', 'ux', 'seo', 'cta', 'roi', 'kpi'
+        ]);
+        
+        // Replace consecutive underscores with spaces and split into words
+        const words = str.replace(/_+/g, ' ').split(/\s+/).filter(word => word.length > 0);
+        
+        return words.map((word, index) => {
+            const lowerWord = word.toLowerCase();
+            
+            // Check if it's a special abbreviation
+            if (uppercaseAbbreviations.has(lowerWord)) {
+                return lowerWord.toUpperCase();
+            }
+            
+            // Always capitalize first and last word
+            if (index === 0 || index === words.length - 1) {
+                return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+            }
+            
+            // Don't capitalize articles, prepositions, and conjunctions in the middle
+            if (lowercaseWords.has(lowerWord)) {
+                return lowerWord;
+            }
+            
+            // Capitalize all other words
+            return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+        }).join(' ');
     }
 }); 
