@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Analytics Analyzer</title>
     <link rel="stylesheet" href="styles.css">
+    <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.css">
 </head>
 <body>
     <div class="container">
@@ -28,6 +31,173 @@
             <h2>Campaign Metrics</h2>
             <div class="results-container" id="resultsContainer">
                 <!-- Results will be displayed here -->
+            </div>
+            <div class="create-report-section" id="createReportSection" style="display: none;">
+                <button id="createReportBtn" class="create-report-button">
+                    <iconify-icon icon="mdi:file-document-outline"></iconify-icon>
+                    Create Report
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Creation Modal -->
+    <div class="modal" id="reportModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create Report</h2>
+                <button class="close-btn" id="closeModalBtn">
+                    <iconify-icon icon="mdi:close"></iconify-icon>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <!-- Content Information Section -->
+                <div class="report-section">
+                    <h3>Content Information</h3>
+                    <div class="content-info-grid">
+                        <div class="info-left">
+                            <div class="input-group">
+                                <label for="contentName">Content Name</label>
+                                <input type="text" id="contentName" placeholder="Enter content name">
+                            </div>
+                            <div class="input-group">
+                                <label for="contentId">ID</label>
+                                <input type="text" id="contentId" placeholder="Enter ID">
+                            </div>
+                            <div class="input-group">
+                                <label for="contentToken">Token</label>
+                                <input type="text" id="contentToken" placeholder="Enter token">
+                            </div>
+                            <div class="input-group">
+                                <label for="contentCreateDate">Content Create Date</label>
+                                <input type="date" id="contentCreateDate">
+                            </div>
+                            <div class="input-group">
+                                <label for="reportDate">Report Date</label>
+                                <input type="text" id="reportDate" readonly>
+                            </div>
+                        </div>
+                        <div class="info-right">
+                            <div class="logo-section">
+                                <div class="omma-logo">
+                                    <img src="img/OmmaVQ Black.png" alt="OmmaVQ Logo" id="ommaLogo">
+                                </div>
+                                <div class="client-logo">
+                                    <div class="client-logo-upload" id="clientLogoUpload">
+                                        <iconify-icon icon="mdi:upload"></iconify-icon>
+                                        <p>Upload Client Logo</p>
+                                        <input type="file" id="clientLogoInput" accept="image/*" hidden>
+                                    </div>
+                                    <div class="client-logo-preview" id="clientLogoPreview" style="display: none;">
+                                        <img id="clientLogoImg" alt="Client Logo">
+                                        <button class="crop-btn" id="cropBtn">Crop</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary Section -->
+                <div class="report-section">
+                    <h3>Summary</h3>
+                    <div class="summary-grid">
+                        <div class="input-group">
+                            <label for="totalAudience">Total Audience</label>
+                            <input type="number" id="totalAudience" placeholder="Enter total audience (optional)">
+                        </div>
+                        <div class="input-group">
+                            <label for="totalImpression">Total Impression</label>
+                            <input type="number" id="totalImpression" readonly>
+                        </div>
+                        <div class="input-group">
+                            <label for="uniqueImpressions">Unique Impressions</label>
+                            <input type="number" id="uniqueImpressions" readonly>
+                        </div>
+                        <div class="input-group">
+                            <label for="uniqueCompletionRate">Unique Completion Rate (%)</label>
+                            <input type="text" id="uniqueCompletionRate" readonly>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Funnel Section -->
+                <div class="report-section">
+                    <h3>Funnel</h3>
+                    <div class="funnel-controls">
+                        <div class="input-group">
+                            <label for="funnelItems">Number of Funnel Items</label>
+                            <select id="funnelItems">
+                                <option value="3">3 Items</option>
+                                <option value="4" selected>4 Items</option>
+                                <option value="5">5 Items</option>
+                                <option value="6">6 Items</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="funnel-builder" id="funnelBuilder">
+                        <!-- Funnel items will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Interactivity Section -->
+                <div class="report-section">
+                    <h3>Interactivity</h3>
+                    <div class="interactivity-grid" id="interactivityGrid">
+                        <!-- Interactivity items will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="modal-actions">
+                    <button id="previewReportBtn" class="preview-btn">
+                        <iconify-icon icon="mdi:eye"></iconify-icon>
+                        Preview Report
+                    </button>
+                    <button id="generateReportBtn" class="generate-btn">
+                        <iconify-icon icon="mdi:download"></iconify-icon>
+                        Generate PDF
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Crop Modal -->
+    <div class="modal" id="cropModal">
+        <div class="modal-content crop-modal-content">
+            <div class="modal-header">
+                <h2>Crop Client Logo</h2>
+                <button class="close-btn" id="closeCropModalBtn">
+                    <iconify-icon icon="mdi:close"></iconify-icon>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="crop-container">
+                    <img id="cropImage" alt="Image to crop">
+                </div>
+                <div class="crop-actions">
+                    <button id="applyCropBtn" class="apply-crop-btn">Apply Crop</button>
+                    <button id="cancelCropBtn" class="cancel-crop-btn">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Preview Modal -->
+    <div class="modal" id="previewModal">
+        <div class="modal-content preview-modal-content">
+            <div class="modal-header">
+                <h2>Report Preview</h2>
+                <button class="close-btn" id="closePreviewModalBtn">
+                    <iconify-icon icon="mdi:close"></iconify-icon>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="report-preview" id="reportPreview">
+                    <!-- Report preview will be generated here -->
+                </div>
             </div>
         </div>
     </div>

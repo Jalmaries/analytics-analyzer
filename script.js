@@ -12,6 +12,13 @@ const TEST_USER_IDS = ['X001', 'PH123', 'OMMATEST'];
 // If sum of these columns > 0 for a user, count as 1 unique interaction
 const INTERACTION_COLUMNS = ['event_count_answer_correct', 'event_count_answer_wrong', 'event_count_back_to_home', 'event_count_replay', 'event_count_scene2_earning_details', 'event_count_scene2_skip_details', 'event_count_scene5_availability', 'event_count_scene5_unique_packcodes', 'event_count_scene5_visibility', 'event_count_scene8_home_page', 'event_count_scene8_nps_campaign', 'event_count_scene8_service_catalog_stg', 'event_count_scene8_service_chargili'];
 
+// Global variables for report creation
+let currentAnalyticsData = null;
+let currentMetadata = null;
+let currentMetrics = null;
+let cropper = null;
+let clientLogoDataUrl = null;
+
 document.addEventListener('DOMContentLoaded', () => {
     // DOM Elements
     const dropArea = document.getElementById('dropArea');
@@ -22,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Setup event listeners
     initializeEventListeners();
+    initializeReportModal();
 
     /**
      * Set up all event listeners for the application
@@ -56,6 +64,817 @@ document.addEventListener('DOMContentLoaded', () => {
         selectFileBtn.addEventListener('click', () => {
             fileInput.click();
         });
+    }
+
+    /**
+     * Initialize report modal functionality
+     */
+    function initializeReportModal() {
+        const createReportBtn = document.getElementById('createReportBtn');
+        const reportModal = document.getElementById('reportModal');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+        const cropModal = document.getElementById('cropModal');
+        const closeCropModalBtn = document.getElementById('closeCropModalBtn');
+        const previewModal = document.getElementById('previewModal');
+        const closePreviewModalBtn = document.getElementById('closePreviewModalBtn');
+
+        // Modal open/close handlers
+        createReportBtn?.addEventListener('click', openReportModal);
+        closeModalBtn?.addEventListener('click', closeReportModal);
+        closeCropModalBtn?.addEventListener('click', closeCropModal);
+        closePreviewModalBtn?.addEventListener('click', closePreviewModal);
+
+        // Close modals when clicking outside
+        window.addEventListener('click', (event) => {
+            if (event.target === reportModal) closeReportModal();
+            if (event.target === cropModal) closeCropModal();
+            if (event.target === previewModal) closePreviewModal();
+        });
+
+        // Client logo upload handling
+        const clientLogoUpload = document.getElementById('clientLogoUpload');
+        const clientLogoInput = document.getElementById('clientLogoInput');
+        
+        clientLogoUpload?.addEventListener('click', () => {
+            clientLogoInput?.click();
+        });
+
+        clientLogoInput?.addEventListener('change', handleClientLogoUpload);
+
+        // Crop button handling
+        const cropBtn = document.getElementById('cropBtn');
+        cropBtn?.addEventListener('click', openCropModal);
+
+        // Crop modal buttons
+        const applyCropBtn = document.getElementById('applyCropBtn');
+        const cancelCropBtn = document.getElementById('cancelCropBtn');
+        
+        applyCropBtn?.addEventListener('click', applyCrop);
+        cancelCropBtn?.addEventListener('click', closeCropModal);
+
+        // Funnel items change handler
+        const funnelItems = document.getElementById('funnelItems');
+        funnelItems?.addEventListener('change', updateFunnelBuilder);
+
+        // Report generation buttons
+        const previewReportBtn = document.getElementById('previewReportBtn');
+        const generateReportBtn = document.getElementById('generateReportBtn');
+        
+        previewReportBtn?.addEventListener('click', previewReport);
+        generateReportBtn?.addEventListener('click', generatePDF);
+    }
+
+    /**
+     * Open report creation modal
+     */
+    function openReportModal() {
+        if (!currentMetrics || !currentMetadata) {
+            showError('No data available for report creation');
+            return;
+        }
+
+        populateReportData();
+        updateFunnelBuilder();
+        populateInteractivityData();
+        
+        const reportModal = document.getElementById('reportModal');
+        reportModal.style.display = 'block';
+    }
+
+    /**
+     * Close report creation modal
+     */
+    function closeReportModal() {
+        const reportModal = document.getElementById('reportModal');
+        reportModal.style.display = 'none';
+    }
+
+    /**
+     * Populate report modal with current data
+     */
+    function populateReportData() {
+        // Content Information
+        document.getElementById('contentName').value = currentMetadata.campaignName || '';
+        document.getElementById('reportDate').value = currentMetadata.displayDate || '';
+        
+        // Summary data
+        document.getElementById('totalImpression').value = currentMetrics.totalImpressions || 0;
+        document.getElementById('uniqueImpressions').value = currentMetrics.uniqueImpressions || 0;
+        
+        // Calculate unique completion rate
+        const completionRate = currentMetrics.uniqueImpressions > 0 
+            ? ((currentMetrics.uniqueContentFinishes / currentMetrics.uniqueImpressions) * 100).toFixed(1)
+            : '0';
+        document.getElementById('uniqueCompletionRate').value = completionRate + '%';
+    }
+
+    /**
+     * Update funnel builder based on selected number of items
+     */
+    function updateFunnelBuilder() {
+        const funnelItems = document.getElementById('funnelItems');
+        const funnelBuilder = document.getElementById('funnelBuilder');
+        const numItems = parseInt(funnelItems?.value || 4);
+
+        if (!funnelBuilder || !currentMetrics) return;
+
+        // Get available metrics for funnel
+        const availableMetrics = getFunnelMetricsOptions();
+        
+        funnelBuilder.innerHTML = '';
+        
+        for (let i = 0; i < numItems; i++) {
+            const funnelItem = createFunnelItem(i, availableMetrics);
+            funnelBuilder.appendChild(funnelItem);
+        }
+
+        // Add move button event listeners
+        setupFunnelMoveButtons();
+    }
+
+    /**
+     * Get available metrics for funnel selection
+     */
+    function getFunnelMetricsOptions() {
+        const options = [
+            { value: 'impression', label: 'Impression', data: currentMetrics.totalImpressions },
+            { value: 'unique_impression', label: 'Unique Impression', data: currentMetrics.uniqueImpressions },
+            { value: 'unique_completion', label: 'Unique Completion', data: currentMetrics.uniqueContentFinishes },
+            { value: 'unique_interactivity', label: 'Unique Interactivity', data: currentMetrics.uniqueInteractions }
+        ];
+
+        // Add event metrics
+        Object.entries(currentMetrics.eventSums || {}).forEach(([key, value]) => {
+            const label = toTitleCase(key.replace(/^event_count_/, ''));
+            options.push({
+                value: key,
+                label: label,
+                data: value
+            });
+        });
+
+        return options.filter(option => option.data !== null && option.data > 0);
+    }
+
+    /**
+     * Create a funnel item element
+     */
+    function createFunnelItem(index, availableMetrics) {
+        const div = document.createElement('div');
+        div.className = 'funnel-item';
+        div.dataset.index = index;
+
+        const defaultMetric = availableMetrics[Math.min(index, availableMetrics.length - 1)];
+
+        div.innerHTML = `
+            <div class="funnel-order">${index + 1}</div>
+            <select class="funnel-metric" data-index="${index}">
+                ${availableMetrics.map(metric => 
+                    `<option value="${metric.value}" ${metric.value === defaultMetric?.value ? 'selected' : ''}>
+                        ${metric.label}
+                    </option>`
+                ).join('')}
+            </select>
+            <input type="text" class="funnel-value" value="${defaultMetric?.data || 0}" readonly>
+            <input type="text" class="funnel-percentage" value="${index === 0 ? '100' : ''}%" readonly>
+            <button class="move-btn move-up" ${index === 0 ? 'disabled' : ''}>
+                <iconify-icon icon="mdi:chevron-up"></iconify-icon>
+            </button>
+        `;
+
+        // Add change listener to metric selector
+        const select = div.querySelector('.funnel-metric');
+        select.addEventListener('change', (e) => {
+            updateFunnelItemData(index, e.target.value, availableMetrics);
+            calculateFunnelPercentages();
+        });
+
+        return div;
+    }
+
+    /**
+     * Update funnel item data when metric selection changes
+     */
+    function updateFunnelItemData(index, metricValue, availableMetrics) {
+        const metric = availableMetrics.find(m => m.value === metricValue);
+        const funnelItem = document.querySelector(`[data-index="${index}"]`);
+        if (funnelItem && metric) {
+            funnelItem.querySelector('.funnel-value').value = metric.data;
+        }
+    }
+
+    /**
+     * Calculate and update funnel percentages
+     */
+    function calculateFunnelPercentages() {
+        const funnelItems = document.querySelectorAll('.funnel-item');
+        let baseValue = 0;
+
+        funnelItems.forEach((item, index) => {
+            const value = parseInt(item.querySelector('.funnel-value').value) || 0;
+            const percentageInput = item.querySelector('.funnel-percentage');
+            
+            if (index === 0) {
+                baseValue = value;
+                percentageInput.value = '100%';
+            } else {
+                const percentage = baseValue > 0 ? ((value / baseValue) * 100).toFixed(1) : '0';
+                percentageInput.value = percentage + '%';
+            }
+        });
+    }
+
+    /**
+     * Setup move button functionality for funnel items
+     */
+    function setupFunnelMoveButtons() {
+        document.querySelectorAll('.move-up').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const funnelItem = e.target.closest('.funnel-item');
+                const index = parseInt(funnelItem.dataset.index);
+                if (index > 0) {
+                    moveFunnelItem(index, index - 1);
+                }
+            });
+        });
+    }
+
+    /**
+     * Move funnel item to new position
+     */
+    function moveFunnelItem(fromIndex, toIndex) {
+        const funnelBuilder = document.getElementById('funnelBuilder');
+        const items = Array.from(funnelBuilder.children);
+        
+        // Swap items
+        const temp = items[fromIndex];
+        items[fromIndex] = items[toIndex];
+        items[toIndex] = temp;
+
+        // Clear and re-append in new order
+        funnelBuilder.innerHTML = '';
+        items.forEach((item, newIndex) => {
+            item.dataset.index = newIndex;
+            item.querySelector('.funnel-order').textContent = newIndex + 1;
+            
+            // Update move button states
+            const moveBtn = item.querySelector('.move-up');
+            moveBtn.disabled = newIndex === 0;
+            
+            funnelBuilder.appendChild(item);
+        });
+
+        calculateFunnelPercentages();
+    }
+
+    /**
+     * Populate interactivity data
+     */
+    function populateInteractivityData() {
+        const interactivityGrid = document.getElementById('interactivityGrid');
+        if (!interactivityGrid || !currentMetrics.eventSums) return;
+
+        // Sort events by value (highest to lowest)
+        const sortedEvents = Object.entries(currentMetrics.eventSums)
+            .sort(([,a], [,b]) => b - a);
+
+        interactivityGrid.innerHTML = '';
+
+        sortedEvents.forEach(([eventKey, eventValue]) => {
+            const uniqueUsers = currentMetrics.eventUniqueUserCounts[eventKey] || 0;
+            const displayName = toTitleCase(eventKey.replace(/^event_count_/, ''));
+            
+            const div = document.createElement('div');
+            div.className = 'interactivity-item';
+            div.innerHTML = `
+                <h4>${displayName}</h4>
+                <div class="value">${eventValue.toLocaleString()}</div>
+                <div class="users">${uniqueUsers.toLocaleString()} unique users</div>
+            `;
+            
+            interactivityGrid.appendChild(div);
+        });
+    }
+
+    /**
+     * Handle client logo upload
+     */
+    function handleClientLogoUpload(event) {
+        const file = event.target.files[0];
+        if (!file || !file.type.startsWith('image/')) {
+            showError('Please select a valid image file');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const clientLogoImg = document.getElementById('clientLogoImg');
+            const clientLogoUpload = document.getElementById('clientLogoUpload');
+            const clientLogoPreview = document.getElementById('clientLogoPreview');
+            
+            clientLogoImg.src = e.target.result;
+            clientLogoUpload.style.display = 'none';
+            clientLogoPreview.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    }
+
+    /**
+     * Open crop modal
+     */
+    function openCropModal() {
+        const clientLogoImg = document.getElementById('clientLogoImg');
+        const cropImage = document.getElementById('cropImage');
+        const cropModal = document.getElementById('cropModal');
+        
+        if (!clientLogoImg.src) return;
+        
+        cropImage.src = clientLogoImg.src;
+        cropModal.style.display = 'block';
+        
+        // Initialize cropper
+        setTimeout(() => {
+            if (cropper) {
+                cropper.destroy();
+            }
+            cropper = new Cropper(cropImage, {
+                aspectRatio: 16 / 9,
+                viewMode: 1,
+                dragMode: 'move',
+                autoCropArea: 1,
+                restore: false,
+                guides: false,
+                center: false,
+                highlight: false,
+                cropBoxMovable: true,
+                cropBoxResizable: true,
+                toggleDragModeOnDblclick: false,
+            });
+        }, 100);
+    }
+
+    /**
+     * Close crop modal
+     */
+    function closeCropModal() {
+        const cropModal = document.getElementById('cropModal');
+        cropModal.style.display = 'none';
+        
+        if (cropper) {
+            cropper.destroy();
+            cropper = null;
+        }
+    }
+
+    /**
+     * Apply crop to client logo
+     */
+    function applyCrop() {
+        if (!cropper) return;
+
+        const canvas = cropper.getCroppedCanvas({
+            width: 300,
+            height: 169,
+            imageSmoothingEnabled: true,
+            imageSmoothingQuality: 'high',
+        });
+
+        clientLogoDataUrl = canvas.toDataURL('image/png');
+        
+        const clientLogoImg = document.getElementById('clientLogoImg');
+        clientLogoImg.src = clientLogoDataUrl;
+        
+        closeCropModal();
+    }
+
+    /**
+     * Preview report
+     */
+    function previewReport() {
+        const reportData = collectReportData();
+        if (!reportData) return;
+
+        generateReportPreview(reportData);
+        
+        const previewModal = document.getElementById('previewModal');
+        previewModal.style.display = 'block';
+    }
+
+    /**
+     * Close preview modal
+     */
+    function closePreviewModal() {
+        const previewModal = document.getElementById('previewModal');
+        previewModal.style.display = 'none';
+    }
+
+    /**
+     * Collect all report data from form
+     */
+    function collectReportData() {
+        const contentName = document.getElementById('contentName').value;
+        const contentId = document.getElementById('contentId').value;
+        const contentToken = document.getElementById('contentToken').value;
+        const contentCreateDate = document.getElementById('contentCreateDate').value;
+        const reportDate = document.getElementById('reportDate').value;
+        const totalAudience = document.getElementById('totalAudience').value;
+
+        if (!contentName.trim()) {
+            showError('Content name is required');
+            return null;
+        }
+
+        // Collect funnel data
+        const funnelData = [];
+        document.querySelectorAll('.funnel-item').forEach(item => {
+            const metric = item.querySelector('.funnel-metric').value;
+            const metricText = item.querySelector('.funnel-metric').selectedOptions[0].text;
+            const value = item.querySelector('.funnel-value').value;
+            const percentage = item.querySelector('.funnel-percentage').value;
+            
+            funnelData.push({
+                metric,
+                metricText,
+                value: parseInt(value) || 0,
+                percentage
+            });
+        });
+
+        // Collect interactivity data
+        const interactivityData = [];
+        document.querySelectorAll('.interactivity-item').forEach(item => {
+            const title = item.querySelector('h4').textContent;
+            const value = item.querySelector('.value').textContent;
+            const users = item.querySelector('.users').textContent;
+            
+            interactivityData.push({ title, value, users });
+        });
+
+        return {
+            contentInfo: {
+                name: contentName,
+                id: contentId,
+                token: contentToken,
+                createDate: contentCreateDate,
+                reportDate: reportDate
+            },
+            summary: {
+                totalAudience: totalAudience ? parseInt(totalAudience) : null,
+                totalImpression: currentMetrics.totalImpressions,
+                uniqueImpressions: currentMetrics.uniqueImpressions,
+                completionRate: document.getElementById('uniqueCompletionRate').value
+            },
+            funnel: funnelData,
+            interactivity: interactivityData,
+            clientLogo: clientLogoDataUrl
+        };
+    }
+
+    /**
+     * Generate report preview HTML
+     */
+    function generateReportPreview(reportData) {
+        const reportPreview = document.getElementById('reportPreview');
+        
+        const summaryCards = reportData.summary.totalAudience 
+            ? `
+                <div class="summary-card">
+                    <iconify-icon icon="mdi:account-group"></iconify-icon>
+                    <div class="value">${reportData.summary.totalAudience.toLocaleString()}</div>
+                    <div class="label">Total Audience</div>
+                </div>
+                <div class="summary-card">
+                    <iconify-icon icon="mdi:eye"></iconify-icon>
+                    <div class="value">${reportData.summary.totalImpression.toLocaleString()}</div>
+                    <div class="label">Total Impression</div>
+                </div>
+                <div class="summary-card">
+                    <iconify-icon icon="mdi:account-multiple"></iconify-icon>
+                    <div class="value">${reportData.summary.uniqueImpressions.toLocaleString()}</div>
+                    <div class="label">Unique Impression</div>
+                </div>
+                <div class="summary-card">
+                    <iconify-icon icon="mdi:check-circle"></iconify-icon>
+                    <div class="value">${reportData.summary.completionRate}</div>
+                    <div class="label">Unique Completion Rate</div>
+                </div>
+            ` : `
+                <div class="summary-card">
+                    <iconify-icon icon="mdi:eye"></iconify-icon>
+                    <div class="value">${reportData.summary.totalImpression.toLocaleString()}</div>
+                    <div class="label">Total Impression</div>
+                </div>
+                <div class="summary-card">
+                    <iconify-icon icon="mdi:account-multiple"></iconify-icon>
+                    <div class="value">${reportData.summary.uniqueImpressions.toLocaleString()}</div>
+                    <div class="label">Unique Impression</div>
+                </div>
+                <div class="summary-card">
+                    <iconify-icon icon="mdi:check-circle"></iconify-icon>
+                    <div class="value">${reportData.summary.completionRate}</div>
+                    <div class="label">Unique Completion Rate</div>
+                </div>
+            `;
+
+        const funnelSteps = reportData.funnel.map(item => 
+            `<div class="funnel-step">
+                <span>${item.metricText}</span>
+                <span>${item.value.toLocaleString()}</span>
+            </div>`
+        ).join('');
+
+        const funnelStats = reportData.funnel.map(item => 
+            `<div class="funnel-stat">
+                <iconify-icon icon="mdi:chart-line"></iconify-icon>
+                <div class="stat-value">${item.percentage}</div>
+                <div class="stat-label">${item.value.toLocaleString()} of viewers</div>
+            </div>`
+        ).join('');
+
+        const interactivityStats = reportData.interactivity.slice(0, 9).map(item => 
+            `<div class="interactivity-stat">
+                <h4>${item.title}</h4>
+                <div class="value">${item.value}</div>
+                <div class="percentage">${item.users}</div>
+            </div>`
+        ).join('');
+
+        const clientLogoHtml = reportData.clientLogo 
+            ? `<img src="${reportData.clientLogo}" alt="Client Logo" class="client-logo-preview">` 
+            : '';
+
+        reportPreview.innerHTML = `
+            <div class="report-header">
+                <div class="report-content-info">
+                    <div style="font-size: 12px; color: #666; margin-bottom: 5px;">
+                        <strong>Content Name:</strong> ${reportData.contentInfo.name}<br>
+                        ${reportData.contentInfo.id ? `<strong>ID:</strong> ${reportData.contentInfo.id}<br>` : ''}
+                        ${reportData.contentInfo.token ? `<strong>Token:</strong> ${reportData.contentInfo.token}<br>` : ''}
+                        ${reportData.contentInfo.createDate ? `<strong>Content Create Date:</strong> ${reportData.contentInfo.createDate}<br>` : ''}
+                        ${reportData.contentInfo.reportDate ? `<strong>Report Date:</strong> ${reportData.contentInfo.reportDate}` : ''}
+                    </div>
+                    <h1>VQ CONTENT ANALYTICS</h1>
+                </div>
+                <div class="report-logos">
+                    <img src="img/OmmaVQ Black.png" alt="OmmaVQ Logo" class="omma-logo-preview">
+                    ${clientLogoHtml}
+                </div>
+            </div>
+
+            <div class="report-summary">
+                <h2>Summary</h2>
+                <div class="summary-cards">
+                    ${summaryCards}
+                </div>
+            </div>
+
+            <div class="report-funnel">
+                <h2>Funnel</h2>
+                <div class="funnel-visualization">
+                    ${funnelSteps}
+                </div>
+                <div class="funnel-stats">
+                    ${funnelStats}
+                </div>
+            </div>
+
+            <div class="report-interactivity">
+                <h2>Interactivity</h2>
+                <div class="interactivity-stats">
+                    ${interactivityStats}
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Generate PDF from report
+     */
+    function generatePDF() {
+        const reportData = collectReportData();
+        if (!reportData) return;
+
+        // Generate the report preview first
+        generateReportPreview(reportData);
+        
+        // Use browser's print functionality to generate PDF
+        const printWindow = window.open('', '_blank');
+        const reportHtml = document.getElementById('reportPreview').innerHTML;
+        
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>${reportData.contentInfo.name} - Analytics Report</title>
+                <style>
+                    ${getReportPrintStyles()}
+                </style>
+            </head>
+            <body>
+                <div class="report-preview">
+                    ${reportHtml}
+                </div>
+                <script>
+                    window.onload = function() {
+                        setTimeout(function() {
+                            window.print();
+                            window.close();
+                        }, 1000);
+                    };
+                </script>
+            </body>
+            </html>
+        `);
+        
+        printWindow.document.close();
+    }
+
+    /**
+     * Get print-specific styles for PDF generation
+     */
+    function getReportPrintStyles() {
+        return `
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            
+            body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                background: white;
+                color: #333;
+            }
+            
+            .report-preview {
+                background: white;
+                padding: 40px;
+                max-width: 595px;
+                margin: 0 auto;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            }
+            
+            .report-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                margin-bottom: 30px;
+                padding-bottom: 20px;
+                border-bottom: 2px solid #f0f0f0;
+            }
+            
+            .report-content-info {
+                flex: 1;
+            }
+            
+            .report-content-info h1 {
+                color: #2c3e50;
+                font-size: 28px;
+                margin-bottom: 20px;
+                font-weight: 700;
+            }
+            
+            .report-logos {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 15px;
+            }
+            
+            .omma-logo-preview {
+                max-width: 120px;
+                height: auto;
+            }
+            
+            .client-logo-preview {
+                max-width: 100px;
+                max-height: 80px;
+                height: auto;
+            }
+            
+            .report-summary h2,
+            .report-funnel h2,
+            .report-interactivity h2 {
+                color: #2c3e50;
+                font-size: 20px;
+                margin-bottom: 20px;
+                font-weight: 600;
+            }
+            
+            .summary-cards {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 15px;
+                margin-bottom: 20px;
+            }
+            
+            .summary-card {
+                text-align: center;
+                padding: 15px;
+                background: #f8f9fa;
+                border-radius: 8px;
+                border-left: 4px solid #667eea;
+            }
+            
+            .summary-card .value {
+                font-size: 18px;
+                font-weight: bold;
+                color: #2c3e50;
+                margin: 8px 0 5px;
+            }
+            
+            .summary-card .label {
+                font-size: 11px;
+                color: #666;
+                font-weight: 600;
+            }
+            
+            .funnel-visualization {
+                display: flex;
+                flex-direction: column;
+                gap: 3px;
+                max-width: 350px;
+                margin-bottom: 20px;
+            }
+            
+            .funnel-step {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 8px 15px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                font-weight: 600;
+                font-size: 14px;
+            }
+            
+            .funnel-stats {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 10px;
+                margin-bottom: 30px;
+            }
+            
+            .funnel-stat {
+                text-align: center;
+                padding: 8px;
+                background: white;
+                border: 1px solid #e0e0e0;
+                border-radius: 6px;
+            }
+            
+            .funnel-stat .stat-value {
+                font-size: 14px;
+                font-weight: bold;
+                color: #2c3e50;
+                margin-bottom: 3px;
+            }
+            
+            .funnel-stat .stat-label {
+                font-size: 9px;
+                color: #666;
+            }
+            
+            .interactivity-stats {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 10px;
+            }
+            
+            .interactivity-stat {
+                background: white;
+                padding: 8px;
+                border: 1px solid #e0e0e0;
+                border-radius: 6px;
+                text-align: center;
+            }
+            
+            .interactivity-stat h4 {
+                color: #2c3e50;
+                font-size: 10px;
+                margin-bottom: 5px;
+                font-weight: 600;
+            }
+            
+            .interactivity-stat .value {
+                font-size: 14px;
+                font-weight: bold;
+                color: #667eea;
+                margin-bottom: 3px;
+            }
+            
+            .interactivity-stat .percentage {
+                font-size: 8px;
+                color: #666;
+            }
+            
+            @media print {
+                body {
+                    -webkit-print-color-adjust: exact;
+                    print-color-adjust: exact;
+                }
+            }
+        `;
     }
 
     /**
@@ -151,11 +970,22 @@ document.addEventListener('DOMContentLoaded', () => {
             // Calculate metrics
             const metrics = calculateMetrics(lines, columnIndexes);
             
+            // Store data globally for report creation
+            currentAnalyticsData = { lines, headers, columnIndexes };
+            currentMetadata = metadata;
+            currentMetrics = metrics;
+            
             // Display results
             displayResults(metadata, metrics);
             
             // Add interactivity
             addResultInteractivity(metrics.missingIds, metadata.campaignName);
+            
+            // Show create report button
+            const createReportSection = document.getElementById('createReportSection');
+            if (createReportSection) {
+                createReportSection.style.display = 'block';
+            }
             
         } catch (error) {
             showError(`Failed to analyze the data: ${error.message}`);
