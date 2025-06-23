@@ -5,9 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Analytics Analyzer</title>
     <link rel="stylesheet" href="styles.css">
-    <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.css">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-funnel@2.0.0/dist/d3-funnel.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -34,7 +36,7 @@
             </div>
             <div class="create-report-section" id="createReportSection" style="display: none;">
                 <button id="createReportBtn" class="create-report-button">
-                    <iconify-icon icon="mdi:file-document-outline"></iconify-icon>
+                    <i class="mdi mdi-file-document-outline"></i>
                     Create Report
                 </button>
             </div>
@@ -47,7 +49,7 @@
             <div class="modal-header">
                 <h2>Create Report</h2>
                 <button class="close-btn" id="closeModalBtn">
-                    <iconify-icon icon="mdi:close"></iconify-icon>
+                    <i class="mdi mdi-close"></i>
                 </button>
             </div>
             
@@ -85,7 +87,7 @@
                                 </div>
                                 <div class="client-logo">
                                     <div class="client-logo-upload" id="clientLogoUpload">
-                                        <iconify-icon icon="mdi:upload"></iconify-icon>
+                                        <i class="mdi mdi-upload"></i>
                                         <p>Upload Client Logo</p>
                                         <input type="file" id="clientLogoInput" accept="image/*" hidden>
                                     </div>
@@ -126,14 +128,15 @@
                 <div class="report-section">
                     <h3>Funnel</h3>
                     <div class="funnel-controls">
-                        <div class="input-group">
-                            <label for="funnelItems">Number of Funnel Items</label>
-                            <select id="funnelItems">
-                                <option value="3">3 Items</option>
-                                <option value="4" selected>4 Items</option>
-                                <option value="5">5 Items</option>
-                                <option value="6">6 Items</option>
-                            </select>
+                        <div class="funnel-count-control">
+                            <label>Number of Funnel Items:</label>
+                            <button class="count-btn" id="funnelMinusBtn">
+                                <i class="mdi mdi-minus"></i>
+                            </button>
+                            <span class="count-display" id="funnelCountDisplay">4</span>
+                            <button class="count-btn" id="funnelPlusBtn">
+                                <i class="mdi mdi-plus"></i>
+                            </button>
                         </div>
                     </div>
                     <div class="funnel-builder" id="funnelBuilder">
@@ -152,11 +155,11 @@
                 <!-- Action Buttons -->
                 <div class="modal-actions">
                     <button id="previewReportBtn" class="preview-btn">
-                        <iconify-icon icon="mdi:eye"></iconify-icon>
+                        <i class="mdi mdi-eye"></i>
                         Preview Report
                     </button>
                     <button id="generateReportBtn" class="generate-btn">
-                        <iconify-icon icon="mdi:download"></iconify-icon>
+                        <i class="mdi mdi-download"></i>
                         Generate PDF
                     </button>
                 </div>
@@ -170,7 +173,7 @@
             <div class="modal-header">
                 <h2>Crop Client Logo</h2>
                 <button class="close-btn" id="closeCropModalBtn">
-                    <iconify-icon icon="mdi:close"></iconify-icon>
+                    <i class="mdi mdi-close"></i>
                 </button>
             </div>
             <div class="modal-body">
@@ -191,7 +194,7 @@
             <div class="modal-header">
                 <h2>Report Preview</h2>
                 <button class="close-btn" id="closePreviewModalBtn">
-                    <iconify-icon icon="mdi:close"></iconify-icon>
+                    <i class="mdi mdi-close"></i>
                 </button>
             </div>
             <div class="modal-body">
