@@ -5,19 +5,91 @@
  * calculates key metrics, and visualizes the results.
  */
 
-// Configuration: Test user IDs to exclude from main metrics
-const TEST_USER_IDS = ['X001', 'PH123', 'OMMATEST'];
+// Application Configuration
+const CONFIG = {
+    // Test user IDs to exclude from main metrics
+    TEST_USER_IDS: ['X001', 'PH123', 'OMMATEST'],
+    
+    // Interaction columns to check for unique interactions
+    // If sum of these columns > 0 for a user, count as 1 unique interaction
+    INTERACTION_COLUMNS: [
+        'event_count_answer_correct', 'event_count_answer_wrong', 'event_count_back_to_home', 
+        'event_count_replay', 'event_count_scene2_earning_details', 'event_count_scene2_skip_details', 
+        'event_count_scene5_availability', 'event_count_scene5_unique_packcodes', 'event_count_scene5_visibility', 
+        'event_count_scene8_home_page', 'event_count_scene8_nps_campaign', 'event_count_scene8_service_catalog_stg', 
+        'event_count_scene8_service_chargili'
+    ],
+    
+    // Funnel configuration
+    FUNNEL: {
+        MIN_ITEMS: 3,
+        MAX_ITEMS: 6,
+        DEFAULT_ITEMS: 4
+    },
+    
+    // Notification settings
+    NOTIFICATION_DURATION: 4000,
+    
+    // Print settings
+    PRINT_TIMEOUT: 1000
+};
 
-// Configuration: Interaction columns to check for unique interactions
-// If sum of these columns > 0 for a user, count as 1 unique interaction
-const INTERACTION_COLUMNS = ['event_count_answer_correct', 'event_count_answer_wrong', 'event_count_back_to_home', 'event_count_replay', 'event_count_scene2_earning_details', 'event_count_scene2_skip_details', 'event_count_scene5_availability', 'event_count_scene5_unique_packcodes', 'event_count_scene5_visibility', 'event_count_scene8_home_page', 'event_count_scene8_nps_campaign', 'event_count_scene8_service_catalog_stg', 'event_count_scene8_service_chargili'];
+// Application State
+const AppState = {
+    currentAnalyticsData: null,
+    currentMetadata: null,
+    currentMetrics: null,
+    cropper: null,
+    clientLogoDataUrl: null
+};
 
-// Global variables for report creation
-let currentAnalyticsData = null;
-let currentMetadata = null;
-let currentMetrics = null;
-let cropper = null;
-let clientLogoDataUrl = null;
+// Utility Functions
+const Utils = {
+    /**
+     * Safely get element by ID with error handling
+     */
+    getElementById(id, required = false) {
+        const element = document.getElementById(id);
+        if (required && !element) {
+            console.error(`Required element with ID '${id}' not found`);
+            throw new Error(`Element with ID '${id}' not found`);
+        }
+        return element;
+    },
+
+    /**
+     * Validate input value
+     */
+    validateInput(value, fieldName, required = true) {
+        if (required && (!value || !value.toString().trim())) {
+            throw new Error(`${fieldName} is required`);
+        }
+        return value;
+    },
+
+    /**
+     * Safely parse integer
+     */
+    safeParseInt(value, defaultValue = 0) {
+        const parsed = parseInt(value);
+        return isNaN(parsed) ? defaultValue : parsed;
+    },
+
+    /**
+     * Debounce function to limit function calls
+     */
+    debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+};
 
 document.addEventListener('DOMContentLoaded', () => {
     // DOM Elements
@@ -120,7 +192,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * Open report creation modal
      */
     function openReportModal() {
-        if (!currentMetrics || !currentMetadata) {
+        if (!AppState.currentMetrics || !AppState.currentMetadata) {
             showError('No data available for report creation');
             return;
         }
@@ -151,16 +223,16 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function populateReportData() {
         // Content Information
-        document.getElementById('contentName').value = currentMetadata.campaignName || '';
-        document.getElementById('reportDate').value = currentMetadata.displayDate || '';
+        document.getElementById('contentName').value = AppState.currentMetadata.campaignName || '';
+        document.getElementById('reportDate').value = AppState.currentMetadata.displayDate || '';
         
         // Summary data
-        document.getElementById('totalImpression').value = currentMetrics.totalImpressions || 0;
-        document.getElementById('uniqueImpressions').value = currentMetrics.uniqueImpressions || 0;
+        document.getElementById('totalImpression').value = AppState.currentMetrics.totalImpressions || 0;
+        document.getElementById('uniqueImpressions').value = AppState.currentMetrics.uniqueImpressions || 0;
         
         // Calculate unique completion rate
-        const completionRate = currentMetrics.uniqueImpressions > 0 
-            ? ((currentMetrics.uniqueContentFinishes / currentMetrics.uniqueImpressions) * 100).toFixed(1)
+        const completionRate = AppState.currentMetrics.uniqueImpressions > 0 
+            ? ((AppState.currentMetrics.uniqueContentFinishes / AppState.currentMetrics.uniqueImpressions) * 100).toFixed(1)
             : '0';
         document.getElementById('uniqueCompletionRate').value = completionRate + '%';
     }
@@ -177,12 +249,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        if (!currentMetrics) {
+        if (!AppState.currentMetrics) {
             console.warn('No current metrics available for funnel builder');
             return;
         }
 
-        const numItems = parseInt(funnelCountDisplay.textContent || 4);
+        const numItems = parseInt(funnelCountDisplay.textContent || CONFIG.FUNNEL.DEFAULT_ITEMS);
 
         // Get available metrics for funnel
         const availableMetrics = getFunnelMetricsOptions();
@@ -219,7 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         minusBtn.addEventListener('click', () => {
             const current = parseInt(countDisplay.textContent);
-            if (current > 3) {
+            if (current > CONFIG.FUNNEL.MIN_ITEMS) {
                 countDisplay.textContent = current - 1;
                 updateFunnelBuilder();
                 updateButtonStates();
@@ -228,7 +300,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         plusBtn.addEventListener('click', () => {
             const current = parseInt(countDisplay.textContent);
-            if (current < 6) {
+            if (current < CONFIG.FUNNEL.MAX_ITEMS) {
                 countDisplay.textContent = current + 1;
                 updateFunnelBuilder();
                 updateButtonStates();
@@ -238,12 +310,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // Update button states
         const updateButtonStates = () => {
             const current = parseInt(countDisplay.textContent);
-            minusBtn.disabled = current <= 3;
-            plusBtn.disabled = current >= 6;
+            minusBtn.disabled = current <= CONFIG.FUNNEL.MIN_ITEMS;
+            plusBtn.disabled = current >= CONFIG.FUNNEL.MAX_ITEMS;
             
             // Update visual state
-            minusBtn.classList.toggle('disabled', current <= 3);
-            plusBtn.classList.toggle('disabled', current >= 6);
+            minusBtn.classList.toggle('disabled', current <= CONFIG.FUNNEL.MIN_ITEMS);
+            plusBtn.classList.toggle('disabled', current >= CONFIG.FUNNEL.MAX_ITEMS);
         };
 
         // Initial state
@@ -486,38 +558,88 @@ document.addEventListener('DOMContentLoaded', () => {
      * Get available metrics for funnel selection
      */
     function getFunnelMetricsOptions() {
-        if (!currentMetrics) {
+        if (!AppState.currentMetrics) {
             return [];
         }
 
         const options = [];
 
-        // Add basic metrics if they exist
-        if (currentMetrics.totalUsers > 0) {
-            options.push({ value: 'total_audience', label: 'Total Audience', data: currentMetrics.totalUsers });
+        // Add basic user metrics
+        if (AppState.currentMetrics.totalUsers > 0) {
+            options.push({ value: 'total_audience', label: 'Total Audience', data: AppState.currentMetrics.totalUsers });
         }
-        if (currentMetrics.totalImpressions > 0) {
-            options.push({ value: 'impression', label: 'Impression', data: currentMetrics.totalImpressions });
+        
+        // Add impression metrics
+        if (AppState.currentMetrics.totalImpressions > 0) {
+            options.push({ value: 'total_impressions', label: 'Total Impressions', data: AppState.currentMetrics.totalImpressions });
         }
-        if (currentMetrics.uniqueImpressions > 0) {
-            options.push({ value: 'unique_impression', label: 'Unique Impression', data: currentMetrics.uniqueImpressions });
+        if (AppState.currentMetrics.uniqueImpressions > 0) {
+            options.push({ value: 'unique_impressions', label: 'Unique Impressions', data: AppState.currentMetrics.uniqueImpressions });
         }
-        if (currentMetrics.uniqueContentFinishes > 0) {
-            options.push({ value: 'unique_completion', label: 'Unique Completion', data: currentMetrics.uniqueContentFinishes });
+        
+        // Add content completion metrics
+        if (AppState.currentMetrics.totalContentFinished > 0) {
+            options.push({ value: 'total_content_finished', label: 'Total Content Finished', data: AppState.currentMetrics.totalContentFinished });
         }
-        if (currentMetrics.uniqueInteractions > 0) {
-            options.push({ value: 'unique_interactivity', label: 'Unique Interactivity', data: currentMetrics.uniqueInteractions });
+        if (AppState.currentMetrics.uniqueContentFinishes > 0) {
+            options.push({ value: 'unique_completion', label: 'Unique Completion', data: AppState.currentMetrics.uniqueContentFinishes });
+        }
+        
+        // Add interaction metrics
+        if (AppState.currentMetrics.uniqueInteractions > 0) {
+            options.push({ value: 'unique_interactivity', label: 'Unique Interactivity', data: AppState.currentMetrics.uniqueInteractions });
+        }
+        
+        // Add thumbnail metrics (if available)
+        if (AppState.currentMetrics.totalThumbnailCount !== null && AppState.currentMetrics.totalThumbnailCount > 0) {
+            options.push({ value: 'total_thumbnail', label: 'Total Thumbnail', data: AppState.currentMetrics.totalThumbnailCount });
+        }
+        if (AppState.currentMetrics.uniqueThumbnailCount !== null && AppState.currentMetrics.uniqueThumbnailCount > 0) {
+            options.push({ value: 'unique_thumbnail', label: 'Unique Thumbnail', data: AppState.currentMetrics.uniqueThumbnailCount });
+        }
+        
+        // Add visit metrics (if available)
+        if (AppState.currentMetrics.totalVisitCount !== null && AppState.currentMetrics.totalVisitCount > 0) {
+            options.push({ value: 'total_visit', label: 'Total Visit', data: AppState.currentMetrics.totalVisitCount });
+        }
+        if (AppState.currentMetrics.uniqueVisitCount !== null && AppState.currentMetrics.uniqueVisitCount > 0) {
+            options.push({ value: 'unique_visit', label: 'Unique Visit', data: AppState.currentMetrics.uniqueVisitCount });
+        }
+        
+        // Add play metrics (if available)
+        if (AppState.currentMetrics.totalPlayCount !== null && AppState.currentMetrics.totalPlayCount > 0) {
+            options.push({ value: 'total_play', label: 'Total Play', data: AppState.currentMetrics.totalPlayCount });
+        }
+        if (AppState.currentMetrics.uniquePlayCount !== null && AppState.currentMetrics.uniquePlayCount > 0) {
+            options.push({ value: 'unique_play', label: 'Unique Play', data: AppState.currentMetrics.uniquePlayCount });
         }
 
         // Add event metrics if they exist
-        if (currentMetrics.eventSums) {
-            Object.entries(currentMetrics.eventSums).forEach(([key, value]) => {
+        if (AppState.currentMetrics.eventSums) {
+            Object.entries(AppState.currentMetrics.eventSums).forEach(([key, value]) => {
                 if (value > 0) {
                     const label = toTitleCase(key.replace(/^event_count_/, ''));
                     // Skip Elevenlabs TTS Synthesis from appearing in funnel options
                     if (!label.toLowerCase().includes('elevenlabs') && !label.toLowerCase().includes('tts synthesis')) {
                         options.push({
                             value: key,
+                            label: label,
+                            data: value
+                        });
+                    }
+                }
+            });
+        }
+        
+        // Add unique user counts for events (if available)
+        if (AppState.currentMetrics.eventUniqueUserCounts) {
+            Object.entries(AppState.currentMetrics.eventUniqueUserCounts).forEach(([key, value]) => {
+                if (value > 0) {
+                    const label = 'Unique ' + toTitleCase(key.replace(/^event_count_/, ''));
+                    // Skip Elevenlabs TTS Synthesis and events that already exist in regular event sums
+                    if (!label.toLowerCase().includes('elevenlabs') && !label.toLowerCase().includes('tts synthesis')) {
+                        options.push({
+                            value: `unique_${key}`,
                             label: label,
                             data: value
                         });
@@ -538,6 +660,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const funnelItem = document.querySelector(`[data-index="${index}"]`);
         if (funnelItem && metric) {
             funnelItem.querySelector('.funnel-value').value = metric.data;
+            
+            // Recalculate percentages after updating the value
+            setTimeout(() => {
+                calculateFunnelPercentages();
+            }, 10);
         }
     }
 
@@ -552,13 +679,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        if (!currentMetrics || !currentMetrics.eventSums) {
+        if (!AppState.currentMetrics || !AppState.currentMetrics.eventSums) {
             interactivityGrid.innerHTML = '<p>No interactivity data available</p>';
             return;
         }
 
         // Sort events by value (highest to lowest)
-        const sortedEvents = Object.entries(currentMetrics.eventSums)
+        const sortedEvents = Object.entries(AppState.currentMetrics.eventSums)
             .filter(([key, value]) => value > 0)
             .sort(([,a], [,b]) => b - a);
 
@@ -570,7 +697,7 @@ document.addEventListener('DOMContentLoaded', () => {
         interactivityGrid.innerHTML = '';
 
         sortedEvents.forEach(([eventKey, eventValue]) => {
-            const uniqueUsers = currentMetrics.eventUniqueUserCounts?.[eventKey] || 0;
+            const uniqueUsers = AppState.currentMetrics.eventUniqueUserCounts?.[eventKey] || 0;
             const displayName = toTitleCase(eventKey.replace(/^event_count_/, ''));
             
             // Skip Elevenlabs TTS Synthesis from interactivity section
@@ -635,11 +762,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * Auto-crop client logo by removing transparent areas
+     * Generic auto-crop function to reduce code duplication
      */
-    function autoCropClientLogo() {
-        const clientLogoImg = document.getElementById('clientLogoImg');
-        if (!clientLogoImg) return;
+    function autoCropImage(imageElement, onSuccess, onError) {
+        if (!imageElement) {
+            onError('Image element not found');
+            return;
+        }
 
         // Create a canvas to analyze the image
         const canvas = document.createElement('canvas');
@@ -692,113 +821,62 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     croppedCtx.drawImage(canvas, minX, minY, width, height, 0, 0, width, height);
                     
-                    // Update the client logo with cropped version
+                    // Return the cropped data URL
                     const croppedDataURL = croppedCanvas.toDataURL('image/png');
-                    clientLogoImg.src = croppedDataURL;
-                    clientLogoDataUrl = croppedDataURL; // Store for PDF generation
-                    
-                    showNotification('Client logo auto-cropped successfully!', 'success');
+                    onSuccess(croppedDataURL);
                 } else {
-                    showNotification('Could not detect content bounds for client logo auto-cropping', 'warning');
+                    onError('Could not detect content bounds for auto-cropping');
                 }
             } catch (error) {
-                console.error('Client logo auto-crop error:', error);
-                showNotification('Client logo auto-crop failed. The image may be from a different domain.', 'warning');
+                console.error('Auto-crop error:', error);
+                onError('Auto-crop failed. The image may be from a different domain.');
             }
         };
         
         img.onerror = function() {
-            showNotification('Failed to load client logo for auto-cropping', 'error');
+            onError('Failed to load image for auto-cropping');
         };
         
-        img.src = clientLogoImg.src;
+        img.src = imageElement.src;
     }
 
     /**
-     * Handle Omma logo auto-cropping
+     * Auto-crop client logo by removing transparent areas
      */
-
+    function autoCropClientLogo() {
+        const clientLogoImg = document.getElementById('clientLogoImg');
+        
+        autoCropImage(
+            clientLogoImg,
+            (croppedDataURL) => {
+                clientLogoImg.src = croppedDataURL;
+                AppState.clientLogoDataUrl = croppedDataURL; // Store for PDF generation
+                showNotification('Client logo auto-cropped successfully!', 'success');
+            },
+            (errorMessage) => {
+                showNotification(errorMessage, 'warning');
+            }
+        );
+    }
 
     /**
      * Auto-crop Omma logo by removing transparent areas
      */
     function autoCropOmmaLogo() {
         const ommaLogo = document.getElementById('ommaLogo');
-        if (!ommaLogo) return;
-
-        // Create a canvas to analyze the image
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
         
-        // Create a new image to ensure it's loaded
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = function() {
-            canvas.width = img.width;
-            canvas.height = img.height;
-            ctx.drawImage(img, 0, 0);
-            
-            try {
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const data = imageData.data;
-                
-                let minX = canvas.width, minY = canvas.height, maxX = 0, maxY = 0;
-                
-                // Find the bounding box of non-transparent pixels
-                for (let y = 0; y < canvas.height; y++) {
-                    for (let x = 0; x < canvas.width; x++) {
-                        const alpha = data[(y * canvas.width + x) * 4 + 3];
-                        if (alpha > 0) { // Non-transparent pixel
-                            minX = Math.min(minX, x);
-                            minY = Math.min(minY, y);
-                            maxX = Math.max(maxX, x);
-                            maxY = Math.max(maxY, y);
-                        }
-                    }
-                }
-                
-                // Add some padding
-                const padding = 5;
-                minX = Math.max(0, minX - padding);
-                minY = Math.max(0, minY - padding);
-                maxX = Math.min(canvas.width, maxX + padding);
-                maxY = Math.min(canvas.height, maxY + padding);
-                
-                const width = maxX - minX;
-                const height = maxY - minY;
-                
-                if (width > 0 && height > 0) {
-                    // Create cropped canvas
-                    const croppedCanvas = document.createElement('canvas');
-                    const croppedCtx = croppedCanvas.getContext('2d');
-                    
-                    croppedCanvas.width = width;
-                    croppedCanvas.height = height;
-                    
-                    croppedCtx.drawImage(canvas, minX, minY, width, height, 0, 0, width, height);
-                    
-                    // Update the Omma logo with cropped version
-                    const croppedDataURL = croppedCanvas.toDataURL('image/png');
-                    ommaLogo.src = croppedDataURL;
-                    
-                    // Store cropped Omma logo for PDF generation
-                    window.croppedOmmaLogoDataUrl = croppedDataURL;
-                    
-                    showNotification('Omma logo auto-cropped successfully!', 'success');
-                } else {
-                    showError('Could not detect content bounds for auto-cropping');
-                }
-            } catch (error) {
-                console.error('Auto-crop error:', error);
-                showError('Auto-crop failed. The image may be from a different domain.');
+        autoCropImage(
+            ommaLogo,
+            (croppedDataURL) => {
+                ommaLogo.src = croppedDataURL;
+                // Store cropped Omma logo for PDF generation
+                window.croppedOmmaLogoDataUrl = croppedDataURL;
+                showNotification('Omma logo auto-cropped successfully!', 'success');
+            },
+            (errorMessage) => {
+                showError(errorMessage);
             }
-        };
-        
-        img.onerror = function() {
-            showError('Failed to load Omma logo for auto-cropping');
-        };
-        
-        img.src = ommaLogo.src;
+        );
     }
 
     /**
@@ -861,10 +939,10 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Initialize cropper
         setTimeout(() => {
-            if (cropper) {
-                cropper.destroy();
+            if (AppState.cropper) {
+                AppState.cropper.destroy();
             }
-            cropper = new Cropper(cropImage, {
+            AppState.cropper = new Cropper(cropImage, {
                 aspectRatio: 16 / 9,
                 viewMode: 1,
                 dragMode: 'move',
@@ -888,9 +966,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const cropModal = document.getElementById('cropModal');
         cropModal.style.display = 'none';
         
-        if (cropper) {
-            cropper.destroy();
-            cropper = null;
+        if (AppState.cropper) {
+            AppState.cropper.destroy();
+            AppState.cropper = null;
         }
     }
 
@@ -898,13 +976,13 @@ document.addEventListener('DOMContentLoaded', () => {
      * Apply crop to client logo
      */
     function applyCrop() {
-        if (!cropper) {
+        if (!AppState.cropper) {
             showError('Cropper not initialized');
             return;
         }
 
         try {
-            const canvas = cropper.getCroppedCanvas({
+            const canvas = AppState.cropper.getCroppedCanvas({
                 width: 300,
                 height: 200,
                 imageSmoothingEnabled: true,
@@ -921,7 +999,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 window.croppingOmmaLogo = false;
             } else {
-                clientLogoDataUrl = croppedDataURL;
+                AppState.clientLogoDataUrl = croppedDataURL;
                 // Update preview
                 const clientLogoImg = document.getElementById('clientLogoImg');
                 clientLogoImg.src = croppedDataURL;
@@ -1024,13 +1102,62 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (metricEl && valueEl) {
                         const metric = metricEl.value;
                         const metricText = metricEl.selectedOptions[0]?.text || metric;
-                        const value = valueEl.value;
+                        let value = parseInt(valueEl.value) || 0;
+                        
+                        // For the first item (index 0), check if there's a percentage base calculation
+                        if (index === 0) {
+                            const percentageBaseEl = item.querySelector('.funnel-percentage-base');
+                            const percentageEl = item.querySelector('.funnel-percentage');
+                            
+                            if (percentageBaseEl && percentageBaseEl.value && percentageEl) {
+                                const percentageBase = percentageBaseEl.value;
+                                const percentageText = percentageEl.value;
+                                
+                                // If a percentage base is selected, calculate the actual value
+                                if (percentageBase === 'total_audience') {
+                                    // Check if user has manually entered a total audience value
+                                    const totalAudienceInput = document.getElementById('totalAudience');
+                                    const totalAudienceValue = totalAudienceInput ? parseInt(totalAudienceInput.value) : null;
+                                    
+                                    if (totalAudienceValue && totalAudienceValue > 0 && percentageText) {
+                                        // Extract percentage number from text like "85.5%"
+                                        const percentageNum = parseFloat(percentageText.replace('%', ''));
+                                        if (!isNaN(percentageNum)) {
+                                            value = Math.round((percentageNum / 100) * totalAudienceValue);
+                                        }
+                                    }
+                                } else {
+                                    // Calculate based on selected metric from CSV data
+                                    const availableMetrics = getFunnelMetricsOptions();
+                                    const baseMetric = availableMetrics.find(m => m.value === percentageBase);
+                                    
+                                    if (baseMetric && baseMetric.data > 0 && percentageText) {
+                                        // Extract percentage number from text like "85.5%"
+                                        const percentageNum = parseFloat(percentageText.replace('%', ''));
+                                        if (!isNaN(percentageNum)) {
+                                            value = Math.round((percentageNum / 100) * baseMetric.data);
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         
                         funnelItems.push({
                             metric,
                             metricText,
-                            value: parseInt(value) || 0
+                            value: value
                         });
+                        
+                        // Debug logging for first item
+                        if (index === 0) {
+                            console.log(`First funnel item collected:`, {
+                                metric,
+                                metricText,
+                                originalValue: parseInt(valueEl.value) || 0,
+                                calculatedValue: value,
+                                hasPercentageBase: !!item.querySelector('.funnel-percentage-base')?.value
+                            });
+                        }
                     }
                 });
             }
@@ -1072,7 +1199,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Use cropped logos if available, otherwise use originals
             const ommaLogoSrc = window.croppedOmmaLogoDataUrl || 'img/OmmaVQ Black.png';
             const clientLogoPreviewEl = document.getElementById('clientLogoPreview');
-            const clientLogoSrc = clientLogoDataUrl || clientLogoPreviewEl?.querySelector('img')?.src || 'data:';
+            const clientLogoSrc = AppState.clientLogoDataUrl || clientLogoPreviewEl?.querySelector('img')?.src || 'data:';
 
             // Get current analytics data for summary
             const currentData = getCurrentAnalyticsData();
@@ -1102,8 +1229,38 @@ document.addEventListener('DOMContentLoaded', () => {
             reportData.funnelItems.forEach((item, index) => {
                 let percentage, calculation;
                 if (index === 0) {
-                    percentage = 100;
-                    calculation = `${item.value.toLocaleString()}/${item.value.toLocaleString()}`;
+                    // For the first item, read the actual calculated percentage from the form
+                    const firstFunnelItem = document.querySelector('[data-index="0"]');
+                    const percentageInput = firstFunnelItem?.querySelector('.funnel-percentage');
+                    
+                    if (percentageInput && percentageInput.value) {
+                        // Extract percentage number from text like "1836.6%"
+                        const percentageText = percentageInput.value;
+                        const percentageNum = parseFloat(percentageText.replace('%', ''));
+                        percentage = !isNaN(percentageNum) ? Math.round(percentageNum * 10) / 10 : 100; // Round to 1 decimal
+                        
+                        // Get the percentage base for calculation display
+                        const percentageBaseSelect = firstFunnelItem?.querySelector('.funnel-percentage-base');
+                        const percentageBase = percentageBaseSelect?.value;
+                        
+                        if (percentageBase) {
+                            if (percentageBase === 'total_audience') {
+                                const totalAudienceInput = document.getElementById('totalAudience');
+                                const totalAudienceValue = totalAudienceInput ? parseInt(totalAudienceInput.value) : null;
+                                calculation = totalAudienceValue ? `${item.value.toLocaleString()}/${totalAudienceValue.toLocaleString()}` : `${item.value.toLocaleString()}/${item.value.toLocaleString()}`;
+                            } else {
+                                // Find the base metric value
+                                const availableMetrics = getFunnelMetricsOptions();
+                                const baseMetric = availableMetrics.find(m => m.value === percentageBase);
+                                calculation = baseMetric ? `${item.value.toLocaleString()}/${baseMetric.data.toLocaleString()}` : `${item.value.toLocaleString()}/${item.value.toLocaleString()}`;
+                            }
+                        } else {
+                            calculation = `${item.value.toLocaleString()}/${item.value.toLocaleString()}`;
+                        }
+                    } else {
+                        percentage = 100;
+                        calculation = `${item.value.toLocaleString()}/${item.value.toLocaleString()}`;
+                    }
                 } else {
                     // Calculate percentage relative to previous item (funnel logic)
                     const previousValue = reportData.funnelItems[index - 1].value;
@@ -1152,27 +1309,28 @@ document.addEventListener('DOMContentLoaded', () => {
             if (currentData.events && Object.keys(currentData.events).length > 0) {
                 const sortedEvents = Object.entries(currentData.events)
                     .sort(([,a], [,b]) => b - a)
-                    .slice(0, 9);
+                    .filter(([event, value]) => {
+                        // Filter out Elevenlabs TTS Synthesis before slicing
+                        return !event.toLowerCase().includes('elevenlabs') && !event.toLowerCase().includes('tts synthesis');
+                    })
+                    .slice(0, 12); // Now take 12 elements after filtering
                 
                 // Get total impressions for percentage calculation
-                const totalImpressions = currentMetrics.totalImpressions || 1;
+                const totalImpressions = AppState.currentMetrics.totalImpressions || 1;
                 
                 sortedEvents.forEach(([event, value]) => {
                     const percentage = Math.round((value / totalImpressions) * 100);
-                    // Skip Elevenlabs TTS Synthesis from report interactivity
-                    if (!event.toLowerCase().includes('elevenlabs') && !event.toLowerCase().includes('tts synthesis')) {
-                        interactivityHTML += `
-                            <div class="interactivity-stat">
-                                <div class="interactivity-stat-header">
-                                    <h4>${event}</h4>
-                                    <div class="interactivity-stat-right">
-                                        <div class="value">${value.toLocaleString()}</div>
-                                        <div class="viewer-text">${percentage}% of viewers</div>
-                                    </div>
+                    interactivityHTML += `
+                        <div class="interactivity-stat">
+                            <div class="interactivity-stat-header">
+                                <h4>${event}</h4>
+                                <div class="interactivity-stat-right">
+                                    <div class="value">${value.toLocaleString()}</div>
+                                    <div class="viewer-text">${percentage}% of viewers</div>
                                 </div>
                             </div>
-                        `;
-                    }
+                        </div>
+                    `;
                 });
             }
 
@@ -1255,8 +1413,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // Clear previous funnel
         funnelContainer.innerHTML = '';
 
-        // Calculate dimensions to be proportional to data values
-        const statsListHeight = funnelData.length * 65; // Increased for better proportions
+        // Calculate dimensions to exactly match the stats rows height
+        // Each funnel-stat has height: 50px, so total height should be exactly that
+        const statsListHeight = funnelData.length * 50; // Exact match with stats rows
         const funnelWidth = 250; // Match reference funnel width
 
         // Prepare data for D3 Funnel
@@ -1274,13 +1433,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Define color scale array including transparent white for the last item
-        const colorScale = ['#667eea', '#5a67d8', '#4c51bf', '#553c9a', '#44337a', '#322659', 'rgba(255,255,255,0.01)'];
+        const colorScale = ['#667eea', '#5a67d8', '#4c51bf', '#553c9a', '#44337a', '#322659', 'rgba(255,255,255,0)'];
 
         // Create funnel options to match reference exactly with pointed triangle
         const options = {
             chart: {
                 width: funnelWidth,
-                height: statsListHeight, // Keep original height
+                height: statsListHeight,
                 bottomWidth: 0, // Creates a perfect triangle point at the end
                 bottomPinch: 1, // This creates the pointed triangle at the end
                 inverted: false,
@@ -1293,8 +1452,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     scale: colorScale, // Simple array of colors
                     type: 'solid'
                 },
-                minHeight: 50, // Increased minimum height for better text visibility
-                highlight: false
+                minHeight: 50, // Exact match with funnel-stat row height (50px)
+                highlight: false,
+                border: {
+                    enabled: false // Disable borders to prevent black lines
+                }
             },
             label: {
                 enabled: true,
@@ -1364,478 +1526,504 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     
                     // Write the complete HTML document
-                    printWindow.document.write(`
-                        <!DOCTYPE html>
-                        <html lang="en">
-                        <head>
-                            <meta charset="UTF-8">
-                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                            <title>${reportData.contentName} - Analytics Report</title>
-                            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
-                            <script src="https://d3js.org/d3.v7.min.js"></script>
-                            <script src="https://cdn.jsdelivr.net/npm/d3-funnel@2.0.0/dist/d3-funnel.min.js"></script>
-                            <style>
-                                /* A4 Page Setup - Remove browser headers and footers */
-                                @page {
-                                    margin: 0;
-                                    size: A4 portrait;
-                                    padding: 0;
-                                }
-                                
-                                * {
-                                    margin: 0;
-                                    padding: 0;
-                                    box-sizing: border-box;
-                                }
-                                
-                                html, body {
-                                    width: 210mm;  /* A4 width */
-                                    height: 297mm; /* A4 height */
-                                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                                    background: white;
-                                    color: #333;
-                                    -webkit-print-color-adjust: exact;
-                                    print-color-adjust: exact;
-                                    overflow-x: hidden;
-                                }
-                                
-                                .report-preview {
-                                    background: white;
-                                    padding: 30px;
-                                    margin: 0 auto;
-                                    width: 210mm;   /* A4 width */
-                                    min-height: 297mm; /* A4 height */
-                                    max-width: none;
-                                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                                    page-break-inside: avoid;
-                                    text-align: center;
-                                }
-                               
-                                .report-header {
-                                    display: flex;
-                                    flex-direction: column;
-                                    align-items: center;
-                                    margin-bottom: 10px;
-                                    gap: 8px;
-                                }
-                                
-                                .report-title {
-                                    width: 100%;
-                                    text-align: center;
-                                    margin-bottom: 15px;
-                                }
-                                
-                                .report-title h1 {
-                                    color: #2c3e50;
-                                    font-size: 24px;
-                                    margin: 0;
-                                    font-weight: 700;
-                                    letter-spacing: 0.5px;
-                                }
-                                
-                                .report-header-content {
-                                    display: flex;
-                                    justify-content: space-between;
-                                    align-items: flex-start;
-                                    width: 100%;
-                                }
-                                
-                                .report-content-info {
-                                    flex: 1;
-                                    text-align: left;
-                                }
-                                
-                                .report-content-info .content-details {
-                                    font-size: 12px;
-                                    color: #666;
-                                    line-height: 1.4;
-                                }
-                                
-                                .report-content-info .content-details div {
-                                    margin-bottom: 4px;
-                                    display: flex;
-                                    align-items: center;
-                                    gap: 6px;
-                                    padding: 2px 0;
-                                }
-                                
-                                .report-content-info .content-details i {
-                                    font-size: 10px;
-                                    color: #666;
-                                }
-                                
-                                .report-logos {
-                                    display: flex;
-                                    flex-direction: column;
-                                    align-items: center;
-                                    gap: 10px;
-                                    justify-content: space-between;
-                                    height: 100%;
-                                }
-                                
-                                .report-logos .omma-logo-preview {
-                                    max-width: 100px;
-                                    max-height: 60px;
-                                    object-fit: contain;
-                                }
-                                
-                                .report-logos .client-logo-preview {
-                                    max-width: 80px;
-                                    max-height: 50px;
-                                    object-fit: contain;
-                                    margin-top: auto;
-                                }
-                                
-                                .report-summary,
-                                .report-funnel,
-                                .report-interactivity {
-                                    text-align: center;
-                                    margin-bottom: 20px;
-                                }
-                                
-                                .report-summary h2,
-                                .report-funnel h2,
-                                .report-interactivity h2 {
-                                    color: #2c3e50;
-                                    font-size: 16px;
-                                    margin-bottom: 15px;
-                                    font-weight: 700;
-                                    text-align: left;
-                                }
-                                
-                                .summary-cards {
-                                    display: flex;
-                                    justify-content: space-between;
-                                    gap: 15px;
-                                    flex-wrap: wrap;
-                                    margin: 0 auto;
-                                    width: 100%;
-                                }
-                                
-                                .summary-card {
-                                    background: white;
-                                    border-radius: 8px;
-                                    padding: 10px 20px;
-                                    text-align: center;
-                                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                                    border: 1px solid #e0e0e0;
-                                    flex: 1;
-                                    min-width: 0;
-                                }
-                                
-                                .summary-card i {
-                                    font-size: 24px;
-                                    color: #667eea;
-                                    margin-bottom: 8px;
-                                    display: block;
-                                }
-                                
-                                .summary-card .value {
-                                    font-size: 24px;
-                                    font-weight: bold;
-                                    color: #2c3e50;
-                                    margin-bottom: 4px;
-                                }
-                                
-                                .summary-card .label {
-                                    font-size: 12px;
-                                    color: #666;
-                                    font-weight: 500;
-                                }
-                                
-                                .funnel-container {
-                                    display: flex;
-                                    gap: 20px;
-                                    align-items: stretch;
-                                    justify-content: space-between;
-                                    width: 100%;
-                                    margin: 0 auto;
-                                }
-                                
-                                .funnel-visualization-d3 {
-                                    flex: 1;
-                                    width: 50%;
-                                    min-height: 250px;
-                                    display: flex;
-                                    justify-content: center;
-                                    align-items: center;
-                                }
-                                
-                                .funnel-stats {
-                                    flex: 1;
-                                    width: 50%;
-                                    display: flex;
-                                    flex-direction: column;
-                                    gap: 8px;
-                                }
-                                
-                                .funnel-stat {
-                                    background: white;
-                                    border: 1px solid #e0e0e0;
-                                    border-radius: 4px;
-                                    padding: 8px 12px;
-                                    text-align: left;
-                                    height: 50px;
-                                    display: flex;
-                                    align-items: center;
-                                    gap: 12px;
-                                }
-                                
-                                .funnel-stat i {
-                                    font-size: 16px;
-                                    color: #667eea;
-                                    flex-shrink: 0;
-                                }
-                                
-                                .funnel-stat-content {
-                                    flex: 1;
-                                    display: flex;
-                                    justify-content: space-between;
-                                    align-items: center;
-                                }
-                                
-                                .funnel-stat-left {
-                                    display: flex;
-                                    flex-direction: column;
-                                }
-                                
-                                .funnel-stat-right {
-                                    text-align: right;
-                                }
-                                
-                                .funnel-stat .stat-name {
-                                    font-size: 11px;
-                                    color: #2c3e50;
-                                    font-weight: 600;
-                                    margin-bottom: 2px;
-                                    line-height: 1.1;
-                                }
-                                
-                                .funnel-stat .stat-value {
-                                    font-size: 14px;
-                                    font-weight: bold;
-                                    color: #2c3e50;
-                                    margin-bottom: 2px;
-                                    line-height: 1;
-                                }
-                                
-                                .funnel-stat .stat-label {
-                                    font-size: 8px;
-                                    color: #666;
-                                    line-height: 1.1;
-                                }
-                                
-                                .interactivity-stats {
-                                    display: grid;
-                                    grid-template-columns: repeat(3, 1fr);
-                                    gap: 8px;
-                                    justify-content: center;
-                                }
-                                
-                                .interactivity-stat {
-                                    background: white;
-                                    padding: 8px;
-                                    border: 1px solid #e0e0e0;
-                                    border-radius: 4px;
-                                    text-align: center;
-                                    display: flex;
-                                    flex-direction: column;
-                                }
-                                
-                                .interactivity-stat h4 {
-                                    color: #2c3e50;
-                                    font-size: 10px;
-                                    margin-bottom: 4px;
-                                    font-weight: 600;
-                                    line-height: 1.2;
-                                }
-                                
-                                .interactivity-stat .value {
-                                    font-size: 14px;
-                                    font-weight: bold;
-                                    color: #2c3e50;
-                                    margin-bottom: 2px;
-                                }
-                                
-                                .interactivity-stat .percentage {
-                                    font-size: 8px;
-                                    color: #666;
-                                    line-height: 1.1;
-                                }
-                                
-                                .interactivity-stat .viewer-text {
-                                    font-size: 7px !important;
-                                    color: #888 !important;
-                                    line-height: 1.1 !important;
-                                    text-align: right !important;
-                                    margin: 0 !important;
-                                }
-                                
-                                .interactivity-stat {
-                                    background: white !important;
-                                    padding: 12px !important;
-                                    border: 1px solid #e0e0e0 !important;
-                                    border-radius: 6px !important;
-                                    display: flex !important;
-                                    flex-direction: column !important;
-                                }
-                                
-                                .interactivity-stat-header {
-                                    display: flex !important;
-                                    justify-content: space-between !important;
-                                    align-items: flex-start !important;
-                                    width: 100% !important;
-                                }
-                                
-                                .interactivity-stat h4 {
-                                    color: #2c3e50 !important;
-                                    font-size: 10px !important;
-                                    margin: 0 !important;
-                                    font-weight: 600 !important;
-                                    text-align: left !important;
-                                    flex: 1 !important;
-                                }
-                                
-                                .interactivity-stat-right {
-                                    display: flex !important;
-                                    flex-direction: column !important;
-                                    align-items: flex-end !important;
-                                    text-align: right !important;
-                                }
-                                
-                                .interactivity-stat .value {
-                                    font-size: 14px !important;
-                                    font-weight: bold !important;
-                                    color: #2c3e50 !important;
-                                    text-align: right !important;
-                                    margin: 0 0 2px 0 !important;
-                                }
-                                
-                                .interactivity-stat .viewer-text {
-                                    font-size: 12px !important;
-                                    color: #888 !important;
-                                    text-align: right !important;
-                                    margin: 0 !important;
-                                }
-                                
-                                .interactivity-stat h4 {
-                                    font-size: 11px !important;
-                                }
-                                
-                                .funnel-stat .stat-name {
-                                    font-size: 12px !important;
-                                }
-                                
-                                /* Funnel minimum width for better text visibility */
-                                .funnel-visualization-d3 svg g {
-                                    min-width: 60px !important;
-                                }
-                                
-                                .funnel-visualization-d3 svg text {
-                                    font-size: 14px !important;
-                                    font-weight: bold !important;
-                                }
-                            </style>
-                        </head>
-                        <body>
-                            ${reportHTML}
-                            <script>
-                                window.addEventListener('load', function() {
-                                    // Wait for all scripts to load
-                                    setTimeout(() => {
-                                        try {
-                                            // Recreate the funnel chart in the new window
-                                            const funnelData = ${JSON.stringify(reportData.funnelItems)};
-                                            const funnelContainer = document.getElementById('funnelChart');
-                                            
-                                            if (funnelContainer && window.D3Funnel && funnelData.length > 0) {
-                                                // Prepare data for D3 Funnel - same as preview
-                                                const data = funnelData.map(item => ({
-                                                    label: item.value.toLocaleString(), // Show value instead of metric name
-                                                    value: item.value,
-                                                    formattedValue: item.value.toLocaleString()
-                                                }));
-                                                
-                                                // Add invisible element at the end with extremely small value to create pointed tip
-                                                data.push({
-                                                    label: '',
-                                                    value: 0.00001, // Smallest possible value to minimize the tip section
-                                                    formattedValue: ''
-                                                });
-
-                                                // Define color scale array including transparent white for the last item
-                                                const colorScale = ['#667eea', '#5a67d8', '#4c51bf', '#553c9a', '#44337a', '#322659', 'rgba(255,255,255,0.01)'];
-
-                                                const options = {
-                                                    chart: {
-                                                        width: 250,
-                                                        height: funnelData.length * 65, // Match preview height
-                                                        bottomWidth: 0,
-                                                        bottomPinch: 1,
-                                                        inverted: false,
-                                                        animate: 0
-                                                    },
-                                                    block: {
-                                                        dynamicHeight: true, // Enable proportional heights
-                                                        dynamicSlope: true,
-                                                        fill: {
-                                                            scale: colorScale, // Same as preview
-                                                            type: 'solid'
-                                                        },
-                                                        minHeight: 50, // Increased minimum height for better text visibility
-                                                        highlight: false
-                                                    },
-                                                    label: {
-                                                        enabled: true,
-                                                        fontFamily: 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif',
-                                                        fontSize: '14px', // Same as preview
-                                                        fill: '#fff',
-                                                        fontWeight: 'bold', // Same as preview
-                                                        format: (label, value, fValue, index) => {
-                                                            // Don't show label for the transparent element (last item)
-                                                            if (index === data.length - 1) {
-                                                                return '';
-                                                            }
-                                                            return label;
-                                                        }
-                                                    },
-                                                    tooltip: {
-                                                        enabled: false
-                                                    }
-                                                };
-
-                                                const chart = new D3Funnel(funnelContainer);
-                                                chart.draw(data, options);
-                                            }
-                                            
-                                            // Auto-print after chart is rendered
-                                            setTimeout(() => {
-                                                window.print();
-                                            }, 1000);
-                                        } catch (error) {
-                                            console.error('Error rendering funnel in print window:', error);
-                                            // Print anyway even if funnel fails
-                                            setTimeout(() => {
-                                                window.print();
-                                            }, 500);
-                                        }
-                                    }, 500);
-                                });
-                            </script>
-                        </body>
-                        </html>
-                    `);
-                    
+                    printWindow.document.write(createPrintHTML(reportData, reportHTML));
                     printWindow.document.close();
                 } catch (error) {
                     showError('Failed to generate PDF: ' + error.message);
                     console.error('PDF generation error:', error);
                 }
-            }, 1000);
+            }, CONFIG.PRINT_TIMEOUT);
         } catch (error) {
             showError('Failed to initialize PDF generation: ' + error.message);
             console.error('PDF initialization error:', error);
         }
+    }
+
+    /**
+     * Create the HTML content for printing
+     */
+    function createPrintHTML(reportData, reportHTML) {
+        return `
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>${reportData.contentName} - Analytics Report</title>
+                <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
+                <script src="https://d3js.org/d3.v7.min.js"></script>
+                <script src="https://cdn.jsdelivr.net/npm/d3-funnel@2.0.0/dist/d3-funnel.min.js"></script>
+                <style>
+                    ${getPrintStyles()}
+                </style>
+            </head>
+            <body>
+                <div style="width: 210mm; margin: 0 auto; background: white;">
+                    ${reportHTML}
+                </div>
+                <script>
+                    ${getPrintScript(reportData)}
+                </script>
+            </body>
+            </html>
+        `;
+    }
+
+    /**
+     * Get print-specific styles
+     */
+    function getPrintStyles() {
+        return `
+            /* A4 Page Setup - Remove browser headers and footers */
+            @page {
+                margin: 0;
+                size: A4 portrait;
+                padding: 0;
+            }
+            
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            
+            html, body {
+                width: 210mm;
+                height: 297mm;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                background: white;
+                color: #333;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+                overflow-x: hidden;
+            }
+            
+            .report-preview {
+                background: white;
+                padding: 30px;
+                margin: 0 auto;
+                width: 210mm;
+                min-height: 297mm;
+                max-width: none;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                page-break-inside: avoid;
+                text-align: center;
+            }
+            
+            .report-title {
+                width: 100%;
+                text-align: center;
+                margin-bottom: 15px;
+            }
+            
+            .report-title h1 {
+                color: #2c3e50;
+                font-size: 24px;
+                margin: 0;
+                font-weight: 700;
+                letter-spacing: 0.5px;
+            }
+            
+            .report-header {
+                margin-bottom: 15px;
+            }
+            
+            .report-header-content {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                width: 100%;
+                margin-bottom: 10px;
+            }
+            
+            .report-content-info {
+                flex: 1;
+                text-align: left;
+            }
+            
+            .report-content-info .content-details {
+                font-size: 12px;
+                color: #666;
+                line-height: 1.4;
+            }
+            
+            .report-content-info .content-details div {
+                margin-bottom: 4px;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                padding: 2px 0;
+            }
+            
+            .report-content-info .content-details i {
+                font-size: 10px;
+                color: #666;
+            }
+            
+            .report-logos {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                align-items: center;
+                justify-content: flex-start;
+            }
+            
+            .report-logos .omma-logo-preview,
+            .report-logos .client-logo-preview {
+                max-height: 60px;
+                max-width: 120px;
+                object-fit: contain;
+            }
+            
+            /* Section Headers */
+            h2 {
+                color: #2c3e50;
+                font-size: 18px;
+                margin-bottom: 15px;
+                text-align: left;
+                font-weight: 600;
+            }
+            
+            .report-summary {
+                margin-bottom: 20px;
+            }
+            
+            .report-summary h2 {
+                color: #2c3e50;
+                font-size: 18px;
+                margin-bottom: 15px;
+                text-align: left;
+                font-weight: 600;
+            }
+            
+            .report-funnel {
+                margin-bottom: 20px;
+            }
+            
+            .report-funnel h2 {
+                color: #2c3e50;
+                font-size: 18px;
+                margin-bottom: 15px;
+                text-align: left;
+                font-weight: 600;
+            }
+            
+            .report-interactivity {
+                margin-bottom: 20px;
+            }
+            
+            .report-interactivity h2 {
+                color: #2c3e50;
+                font-size: 18px;
+                margin-bottom: 15px;
+                text-align: left;
+                font-weight: 600;
+            }
+            
+            /* Summary Cards */
+            .summary-cards {
+                display: flex;
+                justify-content: space-between;
+                gap: 15px;
+                flex-wrap: wrap;
+                margin: 0 auto;
+                width: 100%;
+                max-width: none;
+            }
+            
+            .summary-card {
+                background: white;
+                border-radius: 8px;
+                padding: 10px 20px;
+                text-align: center;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                border: 1px solid #e0e0e0;
+                flex: 1;
+                min-width: 0;
+                max-width: none;
+            }
+            
+            .summary-card i {
+                font-size: 24px;
+                color: #667eea;
+                margin-bottom: 8px;
+                display: block;
+            }
+            
+            .summary-card .value {
+                font-size: 24px;
+                font-weight: bold;
+                color: #2c3e50;
+                margin-bottom: 4px;
+            }
+            
+            .summary-card .label {
+                font-size: 12px;
+                color: #666;
+                font-weight: 500;
+            }
+            
+            /* Funnel Section */
+            .funnel-container {
+                display: flex;
+                gap: 20px;
+                align-items: stretch;
+                justify-content: space-between;
+                width: 100%;
+                margin: 0 auto;
+            }
+            
+            .funnel-visualization-d3 {
+                flex: 1;
+                width: 50%;
+                min-height: 250px;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+            
+            .funnel-stats {
+                flex: 1;
+                width: 50%;
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            .funnel-stat {
+                background: white;
+                border: 1px solid #e0e0e0;
+                border-radius: 4px;
+                padding: 8px 12px;
+                text-align: left;
+                height: 50px;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+            
+            .funnel-stat i {
+                font-size: 16px;
+                color: #667eea;
+                flex-shrink: 0;
+            }
+            
+            .funnel-stat-content {
+                flex: 1;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            
+            .funnel-stat-left {
+                display: flex;
+                flex-direction: column;
+            }
+            
+            .funnel-stat-right {
+                text-align: right;
+            }
+            
+            .funnel-stat .stat-name {
+                font-size: 12px;
+                color: #2c3e50;
+                font-weight: 600;
+                margin-bottom: 2px;
+                line-height: 1.1;
+            }
+            
+            .funnel-stat .stat-value {
+                font-size: 14px;
+                font-weight: bold;
+                color: #2c3e50;
+                margin-bottom: 2px;
+                line-height: 1;
+            }
+            
+            .funnel-stat .stat-label {
+                font-size: 8px;
+                color: #666;
+                line-height: 1.1;
+            }
+            
+            /* Interactivity Section */
+            .interactivity-stats {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 12px;
+                justify-content: center;
+            }
+            
+            .interactivity-stat {
+                background: white;
+                border: 1px solid #e0e0e0;
+                border-radius: 4px;
+                padding: 12px;
+                display: flex;
+                flex-direction: column;
+            }
+            
+            .interactivity-stat-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                width: 100%;
+            }
+            
+            .interactivity-stat h4 {
+                color: #2c3e50;
+                font-size: 11px;
+                margin: 0;
+                font-weight: 600;
+                flex: 1;
+                text-align: left;
+            }
+            
+            .interactivity-stat-right {
+                text-align: right;
+                flex-shrink: 0;
+                display: flex;
+                flex-direction: column;
+                align-items: flex-end;
+            }
+            
+            .interactivity-stat .value {
+                font-size: 16px;
+                font-weight: bold;
+                color: #2c3e50;
+                margin: 0 0 2px 0;
+            }
+            
+            .interactivity-stat .viewer-text {
+                font-size: 12px;
+                color: #888;
+                line-height: 1.2;
+                margin: 0;
+            }
+            
+            /* SVG and D3 Funnel specific styles */
+            .funnel-visualization-d3 svg {
+                max-width: 100%;
+                height: auto;
+            }
+            
+            /* Print specific adjustments */
+            @media print {
+                body {
+                    margin: 0 !important;
+                    padding: 0 !important;
+                }
+                
+                .report-preview {
+                    box-shadow: none !important;
+                    margin: 0 !important;
+                    padding: 20px !important;
+                }
+            }
+        `;
+    }
+
+    /**
+     * Get print-specific JavaScript
+     */
+    function getPrintScript(reportData) {
+        return `
+            window.addEventListener('load', function() {
+                setTimeout(() => {
+                    try {
+                        const funnelData = ${JSON.stringify(reportData.funnelItems)};
+                        const funnelContainer = document.getElementById('funnelChart');
+                        
+                        if (funnelContainer && window.D3Funnel && funnelData.length > 0) {
+                            generatePrintFunnel(funnelData, funnelContainer);
+                        }
+                        
+                        setTimeout(() => {
+                            window.print();
+                        }, 1000);
+                    } catch (error) {
+                        console.error('Error rendering funnel in print window:', error);
+                        setTimeout(() => {
+                            window.print();
+                        }, 500);
+                    }
+                }, 500);
+            });
+            
+            function generatePrintFunnel(funnelData, funnelContainer) {
+                if (!funnelContainer || !window.D3Funnel) return;
+
+                // Clear previous funnel
+                funnelContainer.innerHTML = '';
+
+                // Calculate dimensions to be proportional to data values
+                const statsListHeight = Math.max(funnelData.length * 50, 250); // Ensure minimum height
+                const funnelWidth = 250; // Match reference funnel width
+
+                // Prepare data for D3 Funnel
+                const data = funnelData.map(item => ({
+                    label: item.value.toLocaleString(), // Show value instead of metric name
+                    value: item.value,
+                    formattedValue: item.value.toLocaleString()
+                }));
+                
+                // Add invisible element at the end with extremely small value to create pointed tip
+                data.push({
+                    label: '',
+                    value: 0.00001, // Smallest possible value to minimize the tip section
+                    formattedValue: ''
+                });
+
+                // Define color scale array including transparent white for the last item
+                const colorScale = ['#667eea', '#5a67d8', '#4c51bf', '#553c9a', '#44337a', '#322659', 'rgba(255,255,255,0)'];
+
+                // Create funnel options to match reference exactly with pointed triangle
+                const options = {
+                    chart: {
+                        width: funnelWidth,
+                        height: statsListHeight,
+                        bottomWidth: 0, // Creates a perfect triangle point at the end
+                        bottomPinch: 1, // This creates the pointed triangle at the end
+                        inverted: false,
+                        animate: 0 // Disable animation for PDF compatibility
+                    },
+                    block: {
+                        dynamicHeight: true, // Enable proportional heights
+                        dynamicSlope: true,
+                        fill: {
+                            scale: colorScale, // Simple array of colors
+                            type: 'solid'
+                        },
+                        minHeight: Math.max(40, Math.floor(statsListHeight / funnelData.length)), // Proportional minimum height
+                        highlight: false,
+                        border: {
+                            enabled: false // Disable borders to prevent black lines
+                        }
+                    },
+                    label: {
+                        enabled: true,
+                        fontFamily: 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif',
+                        fontSize: '14px',
+                        fill: '#fff',
+                        fontWeight: 'bold',
+                        format: (label, value, fValue, index) => {
+                            // Don't show label for the transparent element (last item)
+                            if (index === data.length - 1) {
+                                return '';
+                            }
+                            return label;
+                        }
+                    },
+                    tooltip: {
+                        enabled: false
+                    }
+                };
+
+                // Create the funnel
+                const chart = new D3Funnel(funnelContainer);
+                chart.draw(data, options);
+            }
+        `;
     }
 
     /**
@@ -1932,9 +2120,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const metrics = calculateMetrics(lines, columnIndexes);
             
             // Store data globally for report creation
-            currentAnalyticsData = { lines, headers, columnIndexes };
-            currentMetadata = metadata;
-            currentMetrics = metrics;
+            AppState.currentAnalyticsData = { lines, headers, columnIndexes };
+            AppState.currentMetadata = metadata;
+            AppState.currentMetrics = metrics;
             
             // Display results
             displayResults(metadata, metrics);
@@ -1986,7 +2174,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const playCountIndex = headers.findIndex(h => h.toLowerCase() === 'play_count');
         
         // Find interaction columns for unique interactions calculation
-        const interactionColumnIndexes = INTERACTION_COLUMNS
+        const interactionColumnIndexes = CONFIG.INTERACTION_COLUMNS
             .map(columnName => {
                 const index = headers.findIndex(h => h.toLowerCase() === columnName.toLowerCase());
                 return index !== -1 ? { name: columnName, index } : null;
@@ -2131,7 +2319,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const uniqueId = columns[uniqueIdIndex]?.replace(/"/g, '').trim() || '';
             if (!uniqueId) continue; // Skip rows without an ID
             
-            const isTestUser = TEST_USER_IDS.includes(uniqueId);
+            const isTestUser = CONFIG.TEST_USER_IDS.includes(uniqueId);
             
             // Track found test users
             if (isTestUser) {
@@ -2400,7 +2588,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function addResultInteractivity(missingIds, campaignName) {
         // Add click-to-copy functionality to all result cards
         document.querySelectorAll('.result-card').forEach(card => {
-            card.style.cursor = 'pointer';
             card.title = "Click to copy value";
             
             card.addEventListener('click', function(e) {
@@ -2410,13 +2597,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const rawValue = this.dataset.rawValue;
                 navigator.clipboard.writeText(rawValue)
                     .then(() => {
-                        // Visual feedback - use yellow tone
-                        const originalBackground = this.style.backgroundColor;
-                        this.style.backgroundColor = '#fff9c4'; // Light yellow tone
+                        // Visual feedback using CSS class
+                        this.classList.add('copied');
                         
-                        // Restore background after 1.5 seconds
+                        // Remove the class after 1.5 seconds
                         setTimeout(() => {
-                            this.style.backgroundColor = originalBackground;
+                            this.classList.remove('copied');
                         }, 1500);
                     })
                     .catch(err => {
@@ -2443,7 +2629,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const link = document.createElement('a');
                         link.setAttribute('href', url);
                         link.setAttribute('download', `missing_ids_${campaignName.replace(/\s+/g, '_')}.csv`);
-                        link.style.visibility = 'hidden';
+                        link.classList.add('hidden');
                         
                         // Add to document, click and remove
                         document.body.appendChild(link);
@@ -2533,7 +2719,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * Get current analytics data in a format suitable for report generation
      */
     function getCurrentAnalyticsData() {
-        if (!currentMetrics || !currentAnalyticsData) {
+        if (!AppState.currentMetrics || !AppState.currentAnalyticsData) {
             return { summary: {}, events: {} };
         }
 
@@ -2547,19 +2733,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Add required metrics
-        summary['Total Impressions'] = currentMetrics.totalImpressions.toLocaleString();
-        summary['Unique Impressions'] = currentMetrics.uniqueImpressions.toLocaleString();
+        summary['Total Impressions'] = AppState.currentMetrics.totalImpressions.toLocaleString();
+        summary['Unique Impressions'] = AppState.currentMetrics.uniqueImpressions.toLocaleString();
         
         // Calculate Unique Completion Rate as percentage
-        const completionRate = currentMetrics.uniqueImpressions > 0 
-            ? Math.round((currentMetrics.uniqueContentFinishes / currentMetrics.uniqueImpressions) * 100)
+        const completionRate = AppState.currentMetrics.uniqueImpressions > 0 
+            ? Math.round((AppState.currentMetrics.uniqueContentFinishes / AppState.currentMetrics.uniqueImpressions) * 100)
             : 0;
         summary['Unique Completion Rate'] = `%${completionRate}`;
 
         // Build events data from current metrics
         const events = {};
-        if (currentMetrics.eventSums) {
-            Object.entries(currentMetrics.eventSums).forEach(([key, value]) => {
+        if (AppState.currentMetrics.eventSums) {
+            Object.entries(AppState.currentMetrics.eventSums).forEach(([key, value]) => {
                 const displayName = key.replace(/^event_count_/, '');
                 const formattedName = toTitleCase(displayName);
                 events[formattedName] = value;
@@ -2577,49 +2763,18 @@ document.addEventListener('DOMContentLoaded', () => {
         notification.className = `notification notification-${type}`;
         notification.textContent = message;
         
-        // Style the notification
-        notification.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 12px 20px;
-            border-radius: 6px;
-            color: white;
-            font-weight: 600;
-            z-index: 10000;
-            max-width: 300px;
-            word-wrap: break-word;
-            animation: slideIn 0.3s ease-out;
-        `;
-        
-        // Set background color based on type
-        switch (type) {
-            case 'success':
-                notification.style.backgroundColor = '#28a745';
-                break;
-            case 'error':
-                notification.style.backgroundColor = '#dc3545';
-                break;
-            case 'warning':
-                notification.style.backgroundColor = '#ffc107';
-                notification.style.color = '#000';
-                break;
-            default:
-                notification.style.backgroundColor = '#007bff';
-        }
-        
         document.body.appendChild(notification);
         
-        // Auto-remove after 4 seconds
+        // Auto-remove after configured duration
         setTimeout(() => {
             if (notification.parentNode) {
-                notification.style.animation = 'slideOut 0.3s ease-in';
+                notification.classList.add('slide-out');
                 setTimeout(() => {
                     if (notification.parentNode) {
                         notification.parentNode.removeChild(notification);
                     }
                 }, 300);
             }
-        }, 4000);
+        }, CONFIG.NOTIFICATION_DURATION);
     }
 }); 

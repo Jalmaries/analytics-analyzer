@@ -1,15 +1,74 @@
+/* CSS Custom Properties for better maintainability */
+:root {
+    /* Colors */
+    --primary-color: #667eea;
+    --primary-dark: #5a67d8;
+    --secondary-color: #764ba2;
+    --text-primary: #2c3e50;
+    --text-secondary: #34495e;
+    --text-muted: #7f8c8d;
+    --text-light: #666;
+    --border-color: #e0e0e0;
+    --border-light: #ddd;
+    --background-light: #f5f7fa;
+    --background-card: #f8f9fa;
+    --background-white: white;
+    --error-color: #e74c3c;
+    --error-dark: #c0392b;
+    --success-color: #28a745;
+    --warning-color: #ffc107;
+    --info-color: #007bff;
+    
+    /* Spacing */
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 15px;
+    --spacing-lg: 20px;
+    --spacing-xl: 30px;
+    
+    /* Border radius */
+    --border-radius-sm: 4px;
+    --border-radius-md: 6px;
+    --border-radius-lg: 8px;
+    --border-radius-xl: 10px;
+    --border-radius-round: 50%;
+    
+    /* Shadows */
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+    --shadow-md: 0 3px 10px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 4px 15px rgba(102, 126, 234, 0.4);
+    --shadow-xl: 0 6px 20px rgba(102, 126, 234, 0.6);
+    
+    /* Typography */
+    --font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    --font-size-xs: 10px;
+    --font-size-sm: 12px;
+    --font-size-md: 14px;
+    --font-size-lg: 16px;
+    --font-size-xl: 20px;
+    --font-size-xxl: 24px;
+    
+    /* Transitions */
+    --transition-fast: 0.3s ease;
+    --transition-slow: 0.6s ease;
+    
+    /* Z-index scale */
+    --z-modal: 1000;
+    --z-notification: 10000;
+}
+
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: var(--font-family);
 }
 
 body {
-    background-color: #f5f7fa;
-    color: #333;
+    background-color: var(--background-light);
+    color: var(--text-primary);
     line-height: 1.6;
-    font-size: 16px;
+    font-size: var(--font-size-lg);
 }
 
 .container {
@@ -137,17 +196,18 @@ header h1 {
 }
 
 .result-card {
-    background-color: #f8f9fa;
-    border-radius: 8px;
+    background-color: var(--background-card);
+    border-radius: var(--border-radius-lg);
     padding: 16px;
     text-align: center;
-    border-left: 4px solid #3498db;
+    border-left: 4px solid var(--primary-color);
     position: relative;
-    transition: background-color 0.3s ease;
+    transition: var(--transition-fast);
     overflow: hidden;
     min-height: 120px;
     flex: 0 1 calc(25% - 15px);
     min-width: 200px;
+    cursor: pointer;
 }
 
 .result-card:hover {
@@ -1587,6 +1647,53 @@ h2 {
         transform: translateX(100%);
         opacity: 0;
     }
+}
+
+/* Notification Styles */
+.notification {
+    position: fixed;
+    top: var(--spacing-lg);
+    right: var(--spacing-lg);
+    padding: 12px var(--spacing-lg);
+    border-radius: var(--border-radius-md);
+    color: var(--background-white);
+    font-weight: 600;
+    z-index: var(--z-notification);
+    max-width: 300px;
+    word-wrap: break-word;
+    animation: slideIn var(--transition-fast);
+}
+
+.notification.notification-success {
+    background-color: var(--success-color);
+}
+
+.notification.notification-error {
+    background-color: var(--error-color);
+}
+
+.notification.notification-warning {
+    background-color: var(--warning-color);
+    color: #000;
+}
+
+.notification.notification-info {
+    background-color: var(--info-color);
+}
+
+.notification.slide-out {
+    animation: slideOut var(--transition-fast);
+}
+
+/* Copy feedback styles */
+.result-card.copied {
+    background-color: #fff9c4 !important; /* Light yellow tone */
+    transition: background-color var(--transition-fast);
+}
+
+/* Hidden utility */
+.hidden {
+    visibility: hidden !important;
 }
 
  
