@@ -753,21 +753,7 @@ header h1 {
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
 
-.crop-btn {
-    margin-top: 10px;
-    background: #667eea;
-    color: white;
-    padding: 8px 16px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 12px;
-    transition: background-color 0.3s ease;
-}
 
-.crop-btn:hover {
-    background: #5a67d8;
-}
 
 /* Summary Grid */
 .summary-grid {
@@ -1234,59 +1220,7 @@ header h1 {
     box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
 }
 
-/* Crop Modal Styles */
-.crop-modal-content {
-    max-width: 800px;
-}
 
-.crop-container {
-    max-height: 400px;
-    overflow: hidden;
-    background: #f0f0f0;
-    border-radius: 8px;
-    margin-bottom: 20px;
-}
-
-.crop-container img {
-    max-width: 100%;
-    height: auto;
-}
-
-.crop-actions {
-    display: flex;
-    gap: 15px;
-    justify-content: center;
-}
-
-.apply-crop-btn {
-    background: #28a745;
-    color: white;
-    padding: 10px 20px;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: 600;
-    transition: background-color 0.3s ease;
-}
-
-.apply-crop-btn:hover {
-    background: #218838;
-}
-
-.cancel-crop-btn {
-    background: #6c757d;
-    color: white;
-    padding: 10px 20px;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: 600;
-    transition: background-color 0.3s ease;
-}
-
-.cancel-crop-btn:hover {
-    background: #5a6268;
-}
 
 /* Preview Modal Styles */
 .preview-modal-content {
@@ -1616,6 +1550,35 @@ h2 {
     color: #888;
     line-height: 1.1;
     margin-top: 2px;
+}
+
+/* Upload Client Logo Button */
+.upload-client-logo-btn {
+    width: 100%;
+    background: #667eea;
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    margin-top: 15px;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.upload-client-logo-btn:hover {
+    background: #5a67d8;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.upload-client-logo-btn i {
+    font-size: 16px;
 }
 
 /* Change Logo Button */

@@ -6,8 +6,7 @@
     <title>Analytics Analyzer</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.css">
+
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/d3-funnel@2.0.0/dist/d3-funnel.min.js"></script>
 </head>
@@ -89,12 +88,15 @@
                                     <div class="client-logo-upload" id="clientLogoUpload">
                                         <i class="mdi mdi-upload"></i>
                                         <p>Upload Client Logo</p>
-                                        <input type="file" id="clientLogoInput" accept="image/*" hidden>
                                     </div>
                                     <div class="client-logo-preview" id="clientLogoPreview" style="display: none;">
                                         <img id="clientLogoImg" alt="Client Logo">
-                                        <button class="crop-btn" id="cropBtn">Crop</button>
                                     </div>
+                                    <input type="file" id="clientLogoInput" accept="image/*" hidden>
+                                    <button class="upload-client-logo-btn" id="uploadClientLogoBtn">
+                                        <i class="mdi mdi-upload"></i>
+                                        Upload Client Logo
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -167,26 +169,7 @@
         </div>
     </div>
 
-    <!-- Image Crop Modal -->
-    <div class="modal" id="cropModal">
-        <div class="modal-content crop-modal-content">
-            <div class="modal-header">
-                <h2>Crop Client Logo</h2>
-                <button class="close-btn" id="closeCropModalBtn">
-                    <i class="mdi mdi-close"></i>
-                </button>
-            </div>
-            <div class="modal-body">
-                <div class="crop-container">
-                    <img id="cropImage" alt="Image to crop">
-                </div>
-                <div class="crop-actions">
-                    <button id="applyCropBtn" class="apply-crop-btn">Apply Crop</button>
-                    <button id="cancelCropBtn" class="cancel-crop-btn">Cancel</button>
-                </div>
-            </div>
-        </div>
-    </div>
+
 
     <!-- Report Preview Modal -->
     <div class="modal" id="previewModal">
@@ -205,6 +188,6 @@
         </div>
     </div>
 
-    <script src="script.js"></script>
+    <script type="module" src="main.js"></script>
 </body>
 </html> 
