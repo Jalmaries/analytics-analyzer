@@ -76,6 +76,16 @@ const Utils = {
     },
 
     /**
+     * Format number with dots as thousands separator for PDF reports
+     */
+    formatNumberForPDF(value) {
+        if (typeof value !== 'number') {
+            value = parseInt(value) || 0;
+        }
+        return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    },
+
+    /**
      * Debounce function to limit function calls
      */
     debounce(func, wait) {
@@ -1247,25 +1257,25 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (percentageBase === 'total_audience') {
                                 const totalAudienceInput = document.getElementById('totalAudience');
                                 const totalAudienceValue = totalAudienceInput ? parseInt(totalAudienceInput.value) : null;
-                                calculation = totalAudienceValue ? `${item.value.toLocaleString()}/${totalAudienceValue.toLocaleString()}` : `${item.value.toLocaleString()}/${item.value.toLocaleString()}`;
+                                calculation = totalAudienceValue ? `${Utils.formatNumberForPDF(item.value)}/${Utils.formatNumberForPDF(totalAudienceValue)}` : `${Utils.formatNumberForPDF(item.value)}/${Utils.formatNumberForPDF(item.value)}`;
                             } else {
                                 // Find the base metric value
                                 const availableMetrics = getFunnelMetricsOptions();
                                 const baseMetric = availableMetrics.find(m => m.value === percentageBase);
-                                calculation = baseMetric ? `${item.value.toLocaleString()}/${baseMetric.data.toLocaleString()}` : `${item.value.toLocaleString()}/${item.value.toLocaleString()}`;
+                                calculation = baseMetric ? `${Utils.formatNumberForPDF(item.value)}/${Utils.formatNumberForPDF(baseMetric.data)}` : `${Utils.formatNumberForPDF(item.value)}/${Utils.formatNumberForPDF(item.value)}`;
                             }
                         } else {
-                            calculation = `${item.value.toLocaleString()}/${item.value.toLocaleString()}`;
+                            calculation = `${Utils.formatNumberForPDF(item.value)}/${Utils.formatNumberForPDF(item.value)}`;
                         }
                     } else {
                         percentage = 100;
-                        calculation = `${item.value.toLocaleString()}/${item.value.toLocaleString()}`;
+                        calculation = `${Utils.formatNumberForPDF(item.value)}/${Utils.formatNumberForPDF(item.value)}`;
                     }
                 } else {
                     // Calculate percentage relative to previous item (funnel logic)
                     const previousValue = reportData.funnelItems[index - 1].value;
                     percentage = previousValue > 0 ? Math.round((item.value / previousValue) * 100) : 0;
-                    calculation = `${item.value.toLocaleString()}/${previousValue.toLocaleString()}`;
+                    calculation = `${Utils.formatNumberForPDF(item.value)}/${Utils.formatNumberForPDF(previousValue)}`;
                 }
                 
                 // Choose icon based on exact metric name
@@ -1281,6 +1291,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         icon = 'mdi:account-eye';
                     } else if (metricName.includes('unique completion') || metricName.includes('completion')) {
                         icon = 'mdi:check-decagram';
+                    } else if (metricName.includes('content finished') || metricName.includes('total content finished')) {
+                        icon = 'mdi:check-circle';
                     } else if (metricName.includes('unique interactivity') || metricName.includes('unique interaction')) {
                         icon = 'mdi:gesture-double-tap';
                     }
@@ -1325,7 +1337,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div class="interactivity-stat-header">
                                 <h4>${event}</h4>
                                 <div class="interactivity-stat-right">
-                                    <div class="value">${value.toLocaleString()}</div>
+                                    <div class="value">${Utils.formatNumberForPDF(value)}</div>
                                     <div class="viewer-text">${percentage}% of viewers</div>
                                 </div>
                             </div>
@@ -1353,6 +1365,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                         <div class="report-title">
                             <h1>VQ CONTENT ANALYTICS</h1>
+                            <div class="content-title">${reportData.contentName.toLowerCase()}</div>
                         </div>
                     </div>
 
@@ -1420,9 +1433,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Prepare data for D3 Funnel
         const data = funnelData.map(item => ({
-            label: item.value.toLocaleString(), // Show value instead of metric name
+            label: Utils.formatNumberForPDF(item.value), // Show value instead of metric name
             value: item.value,
-            formattedValue: item.value.toLocaleString()
+            formattedValue: Utils.formatNumberForPDF(item.value)
         }));
         
         // Add invisible element at the end with extremely small value to create pointed tip
@@ -1549,7 +1562,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>${reportData.contentName} - Analytics Report</title>
+                <title>${reportData.contentName} - Analytics Report - ${reportData.reportDate}</title>
                 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
                 <script src="https://d3js.org/d3.v7.min.js"></script>
                 <script src="https://cdn.jsdelivr.net/npm/d3-funnel@2.0.0/dist/d3-funnel.min.js"></script>
@@ -1622,6 +1635,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 margin: 0;
                 font-weight: 700;
                 letter-spacing: 0.5px;
+            }
+            
+            .content-title {
+                color: #2c3e50;
+                font-size: 18px;
+                font-weight: 600;
+                text-transform: uppercase;
+                text-align: center;
+                margin-top: 10px;
+                letter-spacing: 1px;
             }
             
             .report-header {
@@ -1950,6 +1973,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 }, 500);
             });
             
+            function formatNumberForPrint(value) {
+                if (typeof value !== 'number') {
+                    value = parseInt(value) || 0;
+                }
+                return value.toString().replace(/\\B(?=(\\d{3})+(?!\\d))/g, '.');
+            }
+            
             function generatePrintFunnel(funnelData, funnelContainer) {
                 if (!funnelContainer || !window.D3Funnel) return;
 
@@ -1962,9 +1992,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Prepare data for D3 Funnel
                 const data = funnelData.map(item => ({
-                    label: item.value.toLocaleString(), // Show value instead of metric name
+                    label: formatNumberForPrint(item.value), // Show value instead of metric name
                     value: item.value,
-                    formattedValue: item.value.toLocaleString()
+                    formattedValue: formatNumberForPrint(item.value)
                 }));
                 
                 // Add invisible element at the end with extremely small value to create pointed tip
@@ -2478,7 +2508,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <p>${totalContentFinished}</p>
                 <small>${testUserMessage}</small>
             </div>
-            <div class="result-card" data-raw-value="${uniqueContentFinishes}">
+            <div class="result-card" data-raw-value="${uniqueContentFinishes}"> 
                 <h3>Unique Content Finishes</h3>
                 <p>${uniqueContentFinishes}</p>
                 <small>${testUserMessage}</small>
@@ -2729,12 +2759,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // Add Total Audience first if available (optional)
         const totalAudienceInput = document.getElementById('totalAudience');
         if (totalAudienceInput && totalAudienceInput.value) {
-            summary['Total Audience'] = parseInt(totalAudienceInput.value).toLocaleString();
+            summary['Total Audience'] = Utils.formatNumberForPDF(parseInt(totalAudienceInput.value));
         }
 
         // Add required metrics
-        summary['Total Impressions'] = AppState.currentMetrics.totalImpressions.toLocaleString();
-        summary['Unique Impressions'] = AppState.currentMetrics.uniqueImpressions.toLocaleString();
+        summary['Total Impressions'] = Utils.formatNumberForPDF(AppState.currentMetrics.totalImpressions);
+        summary['Unique Impressions'] = Utils.formatNumberForPDF(AppState.currentMetrics.uniqueImpressions);
         
         // Calculate Unique Completion Rate as percentage
         const completionRate = AppState.currentMetrics.uniqueImpressions > 0 

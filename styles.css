@@ -942,6 +942,36 @@ header h1 {
     letter-spacing: 0.5px;
 }
 
+.content-title {
+    color: #2c3e50;
+    font-size: 20px;
+    font-weight: 600;
+    text-transform: uppercase;
+    text-align: center;
+    margin-top: 10px;
+    letter-spacing: 1px;
+}
+
+.content-title {
+    color: #2c3e50;
+    font-size: 20px;
+    font-weight: 600;
+    text-transform: uppercase;
+    text-align: center;
+    margin-top: 10px;
+    letter-spacing: 1px;
+}
+
+.content-title {
+    color: #2c3e50;
+    font-size: 20px;
+    font-weight: 600;
+    text-transform: uppercase;
+    text-align: center;
+    margin-top: 10px;
+    letter-spacing: 1px;
+}
+
 .report-header-content {
     display: flex;
     justify-content: space-between;
