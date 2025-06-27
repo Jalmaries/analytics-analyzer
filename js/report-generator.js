@@ -171,7 +171,7 @@ export class ReportGenerator {
                                 <div class="content-details">
                                     <div><i class="mdi mdi-play-box-multiple"></i><strong>Content Name:</strong> ${reportData.contentName}</div>
                                     <div><i class="mdi mdi-folder-alert-outline"></i><strong>ID:</strong> ${reportData.contentId} <strong>Token:</strong> ${reportData.contentToken}</div>
-                                    <div><i class="mdi mdi-calendar-check-outline"></i><strong>Content Create Date:</strong> ${reportData.contentCreateDate}</div>
+                                    <div><i class="mdi mdi-calendar-check-outline"></i><strong>Content Create Date:</strong> ${reportData.createDate}</div>
                                     <div><i class="mdi mdi-calendar"></i><strong>Report Date:</strong> ${reportData.reportDate}</div>
                                 </div>
                             </div>
